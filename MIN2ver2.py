@@ -1,19 +1,36 @@
-
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from typing import List, Tuple, Union, Optional
+
 """
-最小二乗法による円の検出を行う関数を作成します。
+最小二乗法による円の検出を行う関数
+main: MIN2_ignore_sunspots()
+
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
-version 2.1.1
+version 2.1.2 ->docstringとtypingによる型設定
 """
 
-def cut_and_sampling(sun_threshold):#imgの画像をnで分割、太陽の縁の点をsampling
+"""exsample of useing
+img_path=r"imgs/target"
+img=cv2.imread(img_path,cv2.IMREAD_UNCHANGED)
+cx,cy,r = MIN2_ignore_sunspots(img)
+"""
+
+def cut_and_sampling(sun_threshold: Union[int, float]) -> List[List[int]]:
+    """画像を分割線で走査し、輝度の変化（微分値）から太陽の縁（エッジ）に相当する点の座標をサンプリングする。
+
+    Args:
+        sun_threshold (Union[int, float]): 太陽像とみなす明るさのしきい値。これ以下の直線は処理をスキップする。
+
+    Returns:
+        List[List[int]]: サンプリングされた縁の座標 [x, y] のリスト。
+    """
     #画像を分割して実際の縁の点を収集
-    spots=[]#実際の縁の点を格納するための配列
-    for line_xy in ("x_line","y_line"):#x_lineは横線、y_lineは縦線
-        for i in range(1,divnum):
+    spots: List[List[int]] = []  # 実際の縁の点を格納するための配列
+    for line_xy in ("x_line", "y_line"):  # x_lineは横線、y_lineは縦線
+        for i in range(1, divnum):
             place = height * i // divnum      if line_xy == "x_line" else width * i // divnum#分割線の位置を計算
             line = img[place,:].astype(float) if line_xy == "x_line" else img[:, place].astype(float)#分割線に沿った画素値を取得
             if np.max(line) <= sun_threshold:#太陽像上を通るか
@@ -29,7 +46,18 @@ def cut_and_sampling(sun_threshold):#imgの画像をnで分割、太陽の縁の
                 spots.append([place, min_idx])
     return spots#縁の点の座標を返す
 
-def fit_circle(spots):#縁の点のサンプルを受け取って円のstatusを返す。
+def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
+    """与えられた縁の点の座標群から、最小二乗法を用いて近似円の中心座標と半径を計算する。
+
+    Args:
+        spots (Union[List[List[int]], np.ndarray]): 縁の点の座標 [x, y] を格納した二次元配列、またはNumPy配列。
+
+    Raises:
+        Exception: 与えられた座標が3点未満で円を確定できない場合に例外を発生させる。
+
+    Returns:
+        List[float]: 近似円の中心X座標、中心Y座標、半径を含むリスト [cx, cy, R]。
+    """
     if len(spots)<3:
         print("点が3点未満のため、円を作成できません。")
         raise(f"点不足{show_circle(spots,False)}")
@@ -43,7 +71,16 @@ def fit_circle(spots):#縁の点のサンプルを受け取って円のstatusを
     R = np.sqrt(cx**2 + cy**2 - C)
     return [cx,cy,R]
 
-def show_circle(spots=[],cir_stat=False):#円のstatusを受け取って、画像に円と縁の点を描画して表示する。
+def show_circle(spots: List[List[int]] = [], cir_stat: Union[List[float], bool] = False) -> None:
+    """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画して画面に表示する。
+
+    Args:
+        spots (List[List[int]], optional): 描画する縁の点の座標リスト。デフォルトは []。
+        cir_stat (Union[List[float], bool], optional): 近似円のステータス [cx, cy, R]。描画しない場合は False。デフォルトは False。
+
+    Returns:
+        None: 戻り値はありません（画像をウィンドウに表示します）。
+    """
     fig, ax = plt.subplots()#figとaxの作成
     ax.imshow(img, cmap="magma")#画像をグレースケールで表示
     if cir_stat != False:#cir_statがFalseでないなら、円を描画
@@ -79,12 +116,26 @@ def show_circle(spots=[],cir_stat=False):#円のstatusを受け取って、画�
     ax.axis('equal')###
     plt.show()#windowで表示
 
-def MIN2_ignore_sunspots(readed_img:np.ndarray,n=10,light_threshold=50,filter_times=3,limb_wigth=24,show=False,debug=False):
-    """
-    img:読み込んだ画像を渡してください
-    n:画像格子の分割数
-    light_threshold:太陽の明るさの基準です。
+def MIN2_ignore_sunspots(
+    readed_img: np.ndarray,
+    n: int = 10,
+    light_threshold: int = 50,
+    limb_wigth: int = 24,
+    show: bool = False,
+    debug: bool = False
+) -> Tuple[float, float, float]:
+    """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出する。
 
+    Args:
+        readed_img (np.ndarray): 読み込んだ入力画像（グレースケール画像）。
+        n (int, optional): 画像格子の分割数。デフォルトは 10。
+        light_threshold (int, optional): 太陽の明るさの基準しきい値。デフォルトは 50。
+        limb_wigth (int, optional): 太陽の縁の幅の基準値。デフォルトは 24。
+        show (bool, optional): 最終的な検出結果の画像を表示するかどうか。デフォルトは False。
+        debug (bool, optional): 各ステップ（1回目、外側のみ）の円描画やログを出力するかどうか。デフォルトは False。
+
+    Returns:
+        Tuple[float, float, float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
     """
     #===基本的な変数をglobalで宣言===
     global divnum#分割数、引数ではnとして受け取っている。
@@ -97,56 +148,56 @@ def MIN2_ignore_sunspots(readed_img:np.ndarray,n=10,light_threshold=50,filter_ti
     #円の情報[cx, cy, R]
     spots=cut_and_sampling(light_threshold)#spots=[[x1,y1],[x2,y2],...]の形式で、縁の点の座標を格納したlist
     cx,cy,r=fit_circle(spots)#一回目の円情報
-    print(f"first circle{show_circle(spots,(cx,cy,r))}") if debug and show else None#一回目の円を表示debug用
-    for filtime in  range(filter_times):#何度か繰り返すことでふくすうの黒点にも対応
-        #===MIN2の外側の点を抽出===
-        outside_spots=[]
+    print(f"first circle{show_circle(spots,(cx,cy,r))}") if debug else None#一回目の円を表示debug用
+
+    #===一回目のMIN2の外側の点を抽出===
+    outside_spots=[]
+    for i in range(len(spots)):
+        if int(((spots[i][0]-cx)**2+(spots[i][1]-cy)**2)**(1/2))>r:
+            outside_spots.append(spots[i])
+    if len(outside_spots)>2:
+        #外側の点が３つ以上ないと以下の解析はできないが、 そもそもそのような場合は、黒点の影響は受けていない
+        cxo,cyo,ro=fit_circle(np.array(outside_spots, dtype=float))#外側の点だけで円を作成
+        print(f"only outside circle{show_circle(outside_spots,(cxo,cyo,ro))}") if debug else None#外側の点だけで作成した円を表示
+        
+        #===外側の点と一回目の円からlimb_wigth*(3/2)の範囲にない点を抽出===
+        not_sunspots_idx=[]
+        sunspot=False
+        
+        print (f"外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}") if debug else None
         for i in range(len(spots)):
-            if int(((spots[i][0]-cx)**2+(spots[i][1]-cy)**2)**(1/2))>r:
-                outside_spots.append(spots[i])
-        if len(outside_spots)>2:
-            #外側の点が３つ以上ないと以下の解析はできないが、 そもそもそのような場合は、黒点の影響は受けていない
-            cxo,cyo,ro=fit_circle(np.array(outside_spots, dtype=float))#外側の点だけで円を作成
-            print(f"only outside circle{show_circle(outside_spots,(cxo,cyo,ro))}") if debug and show else None#外側の点だけで作成した円を表示
-            
-            #===外側の点の円からlimb_wigthの範囲にない内側の点を抽出===
-            sunspot=False
-            print (f"外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}") if debug else None
-            pop_queue=[]#削除する点のindexを格納するlist
-            for i, spot in enumerate(spots):
-                x=spot[0]
-                y=spot[1]
-                if not spot in outside_spots:#内側の点だけ
-                    if (x-cxo)**2 > (y-cyo)**2:#円のRLTBのうちRLなら、
-                        min2far = np.sqrt(ro**2-(y-cyo)**2)
-                        print(f"x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}") if debug else None
-                        if min2far-np.abs(cxo-x) > limb_wigth:
-                            sunspot=True
-                            pop_queue.append(i)
-                    else:#円のRLTBのうちTBなら
-                        min2far = np.sqrt(ro**2-(x-cxo)**2)
-                        print(f"x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}") if debug else None
-                        if min2far-np.abs(cyo-y) > limb_wigth:
-                            sunspot=True
-                            pop_queue.append(i)
-            # 削除する点を一括で削除
-            for i in reversed(pop_queue):
-                spots.pop(i)
-            if sunspot:    
-                #黒点とみなされない点だけで円を作成
-                cx,cy,r=fit_circle(np.array(spots, dtype=float))
-            else:
-                break
-        else:
-            break 
-        if show:
-            show_circle(spots,(cx,cy,r))
-    return (cx,cy),r
+            x=spots[i][0]
+            y=spots[i][1]
+            if not spots[i] in outside_spots:#内側の点だけ
+                if (x-cxo)**2 > (y-cyo)**2:#円のRLTBのうちRLなら、
+                    min2far = np.sqrt(ro**2-(y-cyo)**2)
+                    print(f"x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}") if debug else None
+                    if min2far-np.abs(cxo-x) < limb_wigth*(2/3):
+                        not_sunspots_idx+=[i]
+                    else:
+                        sunspot=True
+                else:#円のRLTBのうちTBなら
+                    min2far = np.sqrt(ro**2-(x-cxo)**2)
+                    print(f"x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}") if debug else None
+                    if min2far-np.abs(cyo-y) < limb_wigth*(2/3):
+                        not_sunspots_idx+=[i]
+                    else:
+                        sunspot=True
+            else:#外側の点は全てnot_sunspots_idxに入れる
+                not_sunspots_idx+=[i]
+
+        if sunspot:    
+            #黒点とみなされない点だけで円を作成
+            cx,cy,r=fit_circle(np.array([spots[i] for i in not_sunspots_idx], dtype=float))
+        
+    if show:
+        show_circle([spots[i] for i in not_sunspots_idx],(cx,cy,r))
+    return cx,cy,r
 
 if __name__== "__main__":
     from tkinter.filedialog import askopenfilename
     picpath=askopenfilename(title="画像を選択してください", filetypes=[("Image files", "*.jpg;*.jpeg;*.png;*.tiff")])
     from time import time
     start = time()
-    print("cx,cy,r=",MIN2_ignore_sunspots(cv2.imread(picpath,0),filter_times=2,show=True,debug=True))
+    print(MIN2_ignore_sunspots(cv2.imread(picpath,0),show=True,debug=True))
     print(f"処理時間:{time()-start}秒")
