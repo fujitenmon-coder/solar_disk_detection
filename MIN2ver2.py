@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 最小二乗法による円の検出を行う関数を作成します。
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
+version 2.0
 """
 
 def cut_and_sampling(sun_threshold):#imgの画像をnで分割、太陽の縁の点をsampling
@@ -140,7 +141,7 @@ def MIN2_ignore_sunspots(readed_img,n=10,light_threshold=50,limb_wigth=24,show=F
         
     if show:
         show_circle([spots[i] for i in not_sunspots_idx],(cx,cy,r))
-    return cx,cy,r
+    return (cx,cy),r
 
 if __name__== "__main__":
     from tkinter.filedialog import askopenfilename
