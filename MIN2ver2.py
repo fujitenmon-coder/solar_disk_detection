@@ -241,14 +241,31 @@ def MIN2_ignore_sunspots(
 
 
 if __name__ == "__main__":
-    from tkinter.filedialog import askopenfilename
+    from tkinter.filedialog import askopenfilename, askdirectory
+    if input("onefile(0)/dir(1)?:") == "1":
 
-    picpath = askopenfilename(
-        title="画像を選択してください",
-        filetypes=[("Image files", "*.jpg;*.jpeg;*.png;*.tiff")],
-    )
-    from time import time
+        dirpath = askdirectory(title="フォルダを選択してください")
+        import glob
+        import os
 
-    start = time()
-    print(MIN2_ignore_sunspots(cv2.imread(picpath, 0), show=True, debug=True))
-    print(f"処理時間:{time()-start}秒")
+        patterns = ("*.jpg", "*.jpeg", "*.png", "*.tiff")
+        files = []
+        for p in patterns:
+            files.extend(glob.glob(os.path.join(dirpath, p)))
+        for file in files:
+            img=cv2.imread(file, cv2.IMREAD_UNCHANGED)
+            if img is None:
+                print(f"Failed to read image: {file}")
+                break
+            result=MIN2_ignore_sunspots(img, show=False, debug=False)
+            print((float(result[0]), float(result[1]), float(result[2])))
+    else:
+        picpath = askopenfilename(
+            title="画像を選択してください",
+            filetypes=[("Image files", "*.jpg;*.jpeg;*.png;*.tiff")],
+        )
+        from time import time
+
+        start = time()
+        print(MIN2_ignore_sunspots(cv2.imread(picpath, 0), show=True, debug=True))
+        print(f"処理時間:{time()-start}秒")
