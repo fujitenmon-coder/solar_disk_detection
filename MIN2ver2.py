@@ -11,7 +11,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.1.4"  # show_circleに関数近傍の輝度・微分値のグラフ表示機能を追加
+version = "MIN2 v2.2.0"  # light_thresholdの単位をuint16に対応させた。
 
 
 """exsample of useing
@@ -236,6 +236,10 @@ def MIN2_ignore_sunspots(
     global height, width  # 画像の高さと幅
     height, width = img.shape[0:2]
 
+    if img.dtype == np.uint8:
+        pass
+    elif img.dtype == np.uint16:
+        light_threshold = light_threshold * 256
     # 円の情報[cx, cy, R]
     spots = cut_and_sampling(
         light_threshold
@@ -327,7 +331,7 @@ if __name__ == "__main__":
             if img is None:
                 print(f"Failed to read image: {file}")
                 break
-            result=MIN2_ignore_sunspots(img, show=False, debug=False)
+            result=MIN2_ignore_sunspots(img, show=True, debug=True,limb_wigth=60)
             print((float(result[0]), float(result[1]), float(result[2])))
     else:
         picpath = askopenfilename(
