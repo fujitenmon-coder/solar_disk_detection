@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from typing import List, Tuple, Union, Optional
 
 """
@@ -10,7 +11,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.1.3"  # docstringとtypingによる型設定
+version = "MIN2 v2.1.4"  # show_circleに関数近傍の輝度・微分値のグラフ表示機能を追加
 
 
 """exsample of useing
@@ -86,56 +87,125 @@ def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
 def show_circle(
     spots: List[List[int]] = [], cir_stat: Union[List[float], bool] = False
 ) -> None:
-    """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画して画面に表示する。
-
-    Args:
-        spots (List[List[int]], optional): 描画する縁の点の座標リスト。デフォルトは []。
-        cir_stat (Union[List[float], bool], optional): 近似円のステータス [cx, cy, R]。描画しない場合は False。デフォルトは False。
-
-    Returns:
-        None: 戻り値はありません（画像をウィンドウに表示します）。
+    """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、
+    さらに各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示する。
     """
-    fig, ax = plt.subplots()  # figとaxの作成
-    ax.imshow(img, cmap="magma")  # 画像をグレースケールで表示
-    if cir_stat != False:  # cir_statがFalseでないなら、円を描画
+    # デフォルト引数のミュータブル回避
+    if spots is None:
+        spots = []
+
+    # 点がない場合は画像のみ表示
+    if len(spots) == 0:
+        fig, ax = plt.subplots()
+        ax.imshow(img, cmap="magma")
+        if cir_stat is not None:
+            cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
+            circle = plt.Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
+            ax.add_patch(circle)
+        plt.show()
+        return
+
+    num_spots = len(spots)
+    cols = 5  # 右側に並べる小グラフの列数
+    rows = (num_spots - 1) // cols + 1
+
+    # FigureとGridSpecの作成（左側3列分をメイン画像、右側を小グラフ群に）
+    fig = plt.figure(figsize=(15, max(6, rows * 2)))
+    gs = gridspec.GridSpec(rows, cols + 3, figure=fig)
+
+    # === メイン画像の描画 ===
+    ax_main = fig.add_subplot(gs[:, :3])
+    ax_main.imshow(img, cmap="magma")
+
+    if cir_stat is not None:
         cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
-        circle = plt.Circle(
-            (cx, cy), R, fill=False, color="orange", linewidth=2
-        )  # 結果の円を描画
-        ax.add_patch(circle)  ###
-    if len(spots) > 0:
-        x, y = zip(*spots)
-        ax.scatter(x, y, color="red", label="Edges", s=50)
-    # 座標ラベルを表示
-    for xi, yi in zip(x, y):
-        ax.text(
-            xi,
-            yi,
-            f"({xi:.0f}, {yi:.0f})",
-            color="#8917fd",
-            fontsize=8,
-            ha="left",
-            va="bottom",
+        circle = plt.Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
+        ax_main.add_patch(circle)
+
+    x, y = zip(*spots)
+    ax_main.scatter(x, y, color="red", label="Edges", s=50)
+
+    # 座標ラベルと対応関係のための番号を表示
+    for idx, (xi, yi) in enumerate(zip(x, y)):
+        # グラフと対応させる番号を大きく表示
+        ax_main.text(
+            xi, yi, f"#{idx+1}", color="lime", fontsize=12, fontweight="bold",
+            ha="right", va="bottom"
+        )
+        # 元の座標表示も残す
+        ax_main.text(
+            xi, yi, f"({xi:.0f}, {yi:.0f})", color="#8917fd", fontsize=8,
+            ha="left", va="top"
         )
 
     # 画像の分割線を描画
     lines = []
-    for xy in ["x", "y"]:  # 各分割線のlistを作成
+    for xy in ["x", "y"]:
         lines.append([])
         for nn in range(divnum):
             ap = width / divnum if xy == "x" else height / divnum
             lines[-1].append(ap * (nn + 1))
-    for li in lines[0]:  # x方向の分割線を描画
-        ax.axvline(int(li), color="white", linestyle="--", alpha=0.3)
-    for li in lines[1]:  # y方向の分割線を描画
-        ax.axhline(int(li), color="white", linestyle="--", alpha=0.3)
+    for li in lines[0]:
+        ax_main.axvline(int(li), color="white", linestyle="--", alpha=0.3)
+    for li in lines[1]:
+        ax_main.axhline(int(li), color="white", linestyle="--", alpha=0.3)
 
-    # nの値を左上に固定表示
-    ax.text(0.05, 0.9, f"n={divnum}", color="cyan", fontsize=10, transform=ax.transAxes)
-    ax.legend()  ###
-    ax.axis("equal")  ###
-    plt.show()  # windowで表示
+    ax_main.text(0.05, 0.9, f"n={divnum}", color="cyan", fontsize=10, transform=ax_main.transAxes)
+    ax_main.legend()
+    ax_main.axis("equal")
 
+    # === 各エッジ点付近の小グラフを作成 ===
+    window_size = 15  # 抽出する近傍のサイズ（前後15ピクセル）
+    
+    for idx, (xi, yi) in enumerate(zip(x, y)):
+        # 横線(x_line)上の点か、縦線(y_line)上の点かを判定
+        is_x_line = any(yi == height * i // divnum for i in range(1, divnum))
+        
+        if is_x_line:
+            line_data = img[yi, :].astype(float)
+            center_idx = xi
+        else:  # y_line
+            line_data = img[:, xi].astype(float)
+            center_idx = yi
+            
+        # 中心から前後15ピクセル分を切り出す
+        start = max(0, center_idx - window_size)
+        end = min(len(line_data), center_idx + window_size + 1)
+        
+        vals = line_data[start:end]
+        # np.diffは要素が1つ減るため、プロット用に末尾に0を追加して長さを合わせる
+        grad_t = np.append(np.diff(line_data), 0)
+        grad_vals = grad_t[start:end]
+        
+        # x軸は中心のエッジ点を0とした相対座標にする
+        x_coords = np.arange(start, end) - center_idx
+
+        # 小グラフの配置場所を計算
+        r_idx = idx // cols
+        c_idx = idx % cols
+        ax_sub = fig.add_subplot(gs[r_idx, 3 + c_idx])
+        
+        # タイトルに画像と同じ番号を表示して紐付ける
+        ax_sub.set_title(f"#{idx+1}", fontsize=10, color="black", fontweight="bold")
+        
+        # 【左軸】：明るさ（オレンジ色の実線）
+        color_bright = "tab:orange"
+        ax_sub.plot(x_coords, vals, color=color_bright, linewidth=1.5)
+        ax_sub.tick_params(axis='y', labelcolor=color_bright, labelsize=7)
+        ax_sub.tick_params(axis='x', labelsize=7)
+        ax_sub.grid(alpha=0.3)
+        
+        # 【右軸】：微分値（シアン色の破線）
+        ax_sub_twin = ax_sub.twinx()
+        color_diff = "tab:cyan"
+        ax_sub_twin.plot(x_coords, grad_vals, color=color_diff, linewidth=1.5, linestyle="--")
+        ax_sub_twin.tick_params(axis='y', labelcolor=color_diff, labelsize=7)
+        
+        # 実際に検出されたエッジの点（0の位置）に赤の縦線を引く
+        ax_sub.axvline(0, color='red', linestyle='-', linewidth=1, alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
 
 def MIN2_ignore_sunspots(
     readed_img: np.ndarray,
@@ -164,16 +234,16 @@ def MIN2_ignore_sunspots(
     global img  # 読み込んだ画像
     img = readed_img
     global height, width  # 画像の高さと幅
-    height, width = img.shape
+    height, width = img.shape[0:2]
 
     # 円の情報[cx, cy, R]
     spots = cut_and_sampling(
         light_threshold
     )  # spots=[[x1,y1],[x2,y2],...]の形式で、縁の点の座標を格納したlist
     cx, cy, r = fit_circle(spots)  # 一回目の円情報
-    (
-        print(f"first circle{show_circle(spots,(cx,cy,r))}") if debug else None
-    )  # 一回目の円を表示debug用
+    if debug:
+        print("first circle")
+        show_circle(spots, (cx, cy, r))  # 一回目の円を表示debug用
 
     # ===一回目のMIN2の外側の点を抽出===
     outside_spots = []
