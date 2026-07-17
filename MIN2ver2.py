@@ -11,7 +11,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.2.0"  # light_thresholdの単位をuint16に対応させた。
+version = "MIN2 v2.2.1"  #  show_circleの可視化機能に画像メタデータと反復回数を追加
 
 
 """exsample of useing
@@ -85,7 +85,12 @@ def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
 
 
 def show_circle(
-    spots: List[List[int]] = [], cir_stat: Union[List[float], bool] = False
+    spots: List[List[int]] = None,
+    cir_stat: Union[Tuple[float, float, float], List[float], bool] = False,
+    img_name: str = "Unknown",
+    img_path: str = "",
+    iteration_count: Union[int, str] = 1,
+    is_last: bool = False,
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、
     さらに各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示する。
@@ -98,9 +103,9 @@ def show_circle(
     if len(spots) == 0:
         fig, ax = plt.subplots()
         ax.imshow(img, cmap="magma")
-        if cir_stat is not None:
+        if cir_stat is not False and cir_stat is not None:
             cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
-            circle = plt.Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
+            circle = Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
             ax.add_patch(circle)
         plt.show()
         return
@@ -113,13 +118,25 @@ def show_circle(
     fig = plt.figure(figsize=(15, max(6, rows * 2)))
     gs = gridspec.GridSpec(rows, cols + 3, figure=fig)
 
-    # === メイン画像の描画 ===
+    # is_last が True なら "Last"、それ以外は数値を表示
+    iter_text = "Last" if is_last else str(iteration_count)
+
+    # ウィンドウ全体の上部に大きく表示
+    fig.suptitle(
+        f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold"
+    )
+
+    # メイン画像の描画
     ax_main = fig.add_subplot(gs[:, :3])
+
+    # メイン画像の上に小さくファイルパスを表示
+    ax_main.set_title(f"{img_path}", fontsize=9, color="gray", loc="left", pad=10)
+
     ax_main.imshow(img, cmap="magma")
 
-    if cir_stat is not None:
+    if cir_stat is not False and cir_stat is not None:
         cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
-        circle = plt.Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
+        circle = Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
         ax_main.add_patch(circle)
 
     x, y = zip(*spots)
@@ -129,13 +146,24 @@ def show_circle(
     for idx, (xi, yi) in enumerate(zip(x, y)):
         # グラフと対応させる番号を大きく表示
         ax_main.text(
-            xi, yi, f"#{idx+1}", color="lime", fontsize=12, fontweight="bold",
-            ha="right", va="bottom"
+            xi,
+            yi,
+            f"#{idx+1}",
+            color="lime",
+            fontsize=12,
+            fontweight="bold",
+            ha="right",
+            va="bottom",
         )
         # 元の座標表示も残す
         ax_main.text(
-            xi, yi, f"({xi:.0f}, {yi:.0f})", color="#8917fd", fontsize=8,
-            ha="left", va="top"
+            xi,
+            yi,
+            f"({xi:.0f}, {yi:.0f})",
+            color="#8917fd",
+            fontsize=8,
+            ha="left",
+            va="top",
         )
 
     # 画像の分割線を描画
@@ -150,33 +178,35 @@ def show_circle(
     for li in lines[1]:
         ax_main.axhline(int(li), color="white", linestyle="--", alpha=0.3)
 
-    ax_main.text(0.05, 0.9, f"n={divnum}", color="cyan", fontsize=10, transform=ax_main.transAxes)
+    ax_main.text(
+        0.05, 0.9, f"n={divnum}", color="cyan", fontsize=10, transform=ax_main.transAxes
+    )
     ax_main.legend()
     ax_main.axis("equal")
 
     # === 各エッジ点付近の小グラフを作成 ===
     window_size = 15  # 抽出する近傍のサイズ（前後15ピクセル）
-    
+
     for idx, (xi, yi) in enumerate(zip(x, y)):
         # 横線(x_line)上の点か、縦線(y_line)上の点かを判定
         is_x_line = any(yi == height * i // divnum for i in range(1, divnum))
-        
+
         if is_x_line:
             line_data = img[yi, :].astype(float)
             center_idx = xi
         else:  # y_line
             line_data = img[:, xi].astype(float)
             center_idx = yi
-            
+
         # 中心から前後15ピクセル分を切り出す
         start = max(0, center_idx - window_size)
         end = min(len(line_data), center_idx + window_size + 1)
-        
+
         vals = line_data[start:end]
         # np.diffは要素が1つ減るため、プロット用に末尾に0を追加して長さを合わせる
         grad_t = np.append(np.diff(line_data), 0)
         grad_vals = grad_t[start:end]
-        
+
         # x軸は中心のエッジ点を0とした相対座標にする
         x_coords = np.arange(start, end) - center_idx
 
@@ -184,28 +214,31 @@ def show_circle(
         r_idx = idx // cols
         c_idx = idx % cols
         ax_sub = fig.add_subplot(gs[r_idx, 3 + c_idx])
-        
+
         # タイトルに画像と同じ番号を表示して紐付ける
         ax_sub.set_title(f"#{idx+1}", fontsize=10, color="black", fontweight="bold")
-        
+
         # 【左軸】：明るさ（オレンジ色の実線）
         color_bright = "tab:orange"
         ax_sub.plot(x_coords, vals, color=color_bright, linewidth=1.5)
-        ax_sub.tick_params(axis='y', labelcolor=color_bright, labelsize=7)
-        ax_sub.tick_params(axis='x', labelsize=7)
+        ax_sub.tick_params(axis="y", labelcolor=color_bright, labelsize=7)
+        ax_sub.tick_params(axis="x", labelsize=7)
         ax_sub.grid(alpha=0.3)
-        
+
         # 【右軸】：微分値（シアン色の破線）
         ax_sub_twin = ax_sub.twinx()
         color_diff = "tab:cyan"
-        ax_sub_twin.plot(x_coords, grad_vals, color=color_diff, linewidth=1.5, linestyle="--")
-        ax_sub_twin.tick_params(axis='y', labelcolor=color_diff, labelsize=7)
-        
+        ax_sub_twin.plot(
+            x_coords, grad_vals, color=color_diff, linewidth=1.5, linestyle="--"
+        )
+        ax_sub_twin.tick_params(axis="y", labelcolor=color_diff, labelsize=7)
+
         # 実際に検出されたエッジの点（0の位置）に赤の縦線を引く
-        ax_sub.axvline(0, color='red', linestyle='-', linewidth=1, alpha=0.5)
+        ax_sub.axvline(0, color="red", linestyle="-", linewidth=1, alpha=0.5)
 
     plt.tight_layout()
     plt.show()
+
 
 def MIN2_ignore_sunspots(
     readed_img: np.ndarray,
@@ -214,6 +247,8 @@ def MIN2_ignore_sunspots(
     limb_wigth: int = 24,
     show: bool = False,
     debug: bool = False,
+    img_name: str = "Unknown",
+    img_path: str = "",
 ) -> Tuple[float, float, float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出する。
 
@@ -228,6 +263,7 @@ def MIN2_ignore_sunspots(
     Returns:
         Tuple[float, float, float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
     """
+    global divnum
     # ===基本的な変数をglobalで宣言===
     global divnum  # 分割数、引数ではnとして受け取っている。
     divnum = n
@@ -247,7 +283,10 @@ def MIN2_ignore_sunspots(
     cx, cy, r = fit_circle(spots)  # 一回目の円情報
     if debug:
         print("first circle")
-        show_circle(spots, (cx, cy, r))  # 一回目の円を表示debug用
+        # 1回目 (iteration_count=1)
+        show_circle(
+            spots, (cx, cy, r), img_name=img_name, img_path=img_path, iteration_count=1
+        )
 
     # ===一回目のMIN2の外側の点を抽出===
     outside_spots = []
@@ -255,25 +294,25 @@ def MIN2_ignore_sunspots(
         if int(((spots[i][0] - cx) ** 2 + (spots[i][1] - cy) ** 2) ** (1 / 2)) > r:
             outside_spots.append(spots[i])
     if len(outside_spots) > 2:
-        # 外側の点が３つ以上ないと以下の解析はできないが、 そもそもそのような場合は、黒点の影響は受けていない
-        cxo, cyo, ro = fit_circle(
-            np.array(outside_spots, dtype=float)
-        )  # 外側の点だけで円を作成
-        (
-            print(f"only outside circle{show_circle(outside_spots,(cxo,cyo,ro))}")
-            if debug
-            else None
-        )  # 外側の点だけで作成した円を表示
+        cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float))
 
-        # ===外側の点と一回目の円からlimb_wigth*(3/2)の範囲にない点を抽出===
+        if debug:
+            print(f"only outside circle")
+            #  2回目 (iteration_count=2)
+            show_circle(
+                outside_spots,
+                (cxo, cyo, ro),
+                img_name=img_name,
+                img_path=img_path,
+                iteration_count=2,
+            )
+
         not_sunspots_idx = []
         sunspot = False
 
-        (
+        if debug:
             print(f"外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
-            if debug
-            else None
-        )
+
         for i in range(len(spots)):
             x = spots[i][0]
             y = spots[i][1]
@@ -310,12 +349,20 @@ def MIN2_ignore_sunspots(
             )
 
     if show:
-        show_circle([spots[i] for i in not_sunspots_idx], (cx, cy, r))
+        # 最終結果 (is_last=True)
+        show_circle(
+            [spots[i] for i in not_sunspots_idx],
+            (cx, cy, r),
+            img_name=img_name,
+            img_path=img_path,
+            is_last=True,
+        )
     return cx, cy, r
 
 
 if __name__ == "__main__":
     from tkinter.filedialog import askopenfilename, askdirectory
+
     if input("onefile(0)/dir(1)?:") == "1":
 
         dirpath = askdirectory(title="フォルダを選択してください")
@@ -327,11 +374,11 @@ if __name__ == "__main__":
         for p in patterns:
             files.extend(glob.glob(os.path.join(dirpath, p)))
         for file in files:
-            img=cv2.imread(file, cv2.IMREAD_UNCHANGED)
+            img = cv2.imread(file, cv2.IMREAD_UNCHANGED)
             if img is None:
                 print(f"Failed to read image: {file}")
                 break
-            result=MIN2_ignore_sunspots(img, show=True, debug=True,limb_wigth=60)
+            result = MIN2_ignore_sunspots(img, show=True, debug=True, limb_wigth=60)
             print((float(result[0]), float(result[1]), float(result[2])))
     else:
         picpath = askopenfilename(
