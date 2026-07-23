@@ -1,8 +1,11 @@
 import cv2
+import os
+from matplotlib.patches import Circle
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple, Union, Optional, Dict
+from pprint import pformat
 
 """
 最小二乗法による円の検出を行う関数
@@ -11,7 +14,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.2.1"  #  show_circleの可視化機能に画像メタデータと反復回数を追加
+version = "MIN2 v2.2.2"  #  show_circleの可視化機能に画像メタデータと反復回数を追加
 
 
 """exsample of useing
@@ -69,7 +72,7 @@ def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
         List[float]: 近似円の中心X座標、中心Y座標、半径を含むリスト [cx, cy, R]。
     """
     if len(spots) < 3:
-        print("点が3点未満のため、円を作成できません。")
+        print("[ERROR]:点が3点未満のため、円を作成できません。too little spots")
         raise (f"点不足{show_circle(spots,False)}")
     x, y = np.array([s[0] for s in spots], dtype=float), np.array(
         [s[1] for s in spots], dtype=float
@@ -85,10 +88,10 @@ def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
 
 
 def show_circle(
-    spots: List[List[int]] = None,
+    spots: Optional[List[List[int]]] = None,
     cir_stat: Union[Tuple[float, float, float], List[float], bool] = False,
-    img_name: str = "Unknown",
     img_path: str = "",
+    fig_info: Optional[Dict[str, str]] = None,
     iteration_count: Union[int, str] = 1,
     is_last: bool = False,
 ) -> None:
@@ -122,6 +125,11 @@ def show_circle(
     iter_text = "Last" if is_last else str(iteration_count)
 
     # ウィンドウ全体の上部に大きく表示
+    if img_path:
+        img_name = os.path.basename(img_path)
+    else:
+        img_name = "Unknown"
+
     fig.suptitle(
         f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold"
     )
@@ -131,6 +139,15 @@ def show_circle(
 
     # メイン画像の上に小さくファイルパスを表示
     ax_main.set_title(f"{img_path}", fontsize=9, color="gray", loc="left", pad=10)
+    fig_text = pformat(fig_info, indent=2, width=40)
+    ax_main.text(
+        0.05,
+        0.05,
+        fig_text,
+        ha="left",
+        va="bottom",
+        fontsize=12,
+    )
 
     ax_main.imshow(img, cmap="magma")
 
@@ -247,7 +264,6 @@ def MIN2_ignore_sunspots(
     limb_wigth: int = 24,
     show: bool = False,
     debug: bool = False,
-    img_name: str = "Unknown",
     img_path: str = "",
 ) -> Tuple[float, float, float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出する。
@@ -282,11 +298,16 @@ def MIN2_ignore_sunspots(
     )  # spots=[[x1,y1],[x2,y2],...]の形式で、縁の点の座標を格納したlist
     cx, cy, r = fit_circle(spots)  # 一回目の円情報
     if debug:
-        print("first circle")
-        # 1回目 (iteration_count=1)
-        show_circle(
-            spots, (cx, cy, r), img_name=img_name, img_path=img_path, iteration_count=1
-        )
+        print(f"[INFO]:trial circle (cx,cy,r)={cx,cy,r}")
+        if show:
+            # 1回目 (iteration_count=1)
+            show_circle(
+                spots,
+                (cx, cy, r),
+                img_path=img_path,
+                iteration_count=1,
+                fig_info={"circle": "first trial"},
+            )
 
     # ===一回目のMIN2の外側の点を抽出===
     outside_spots = []
@@ -295,23 +316,23 @@ def MIN2_ignore_sunspots(
             outside_spots.append(spots[i])
     if len(outside_spots) > 2:
         cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float))
-
         if debug:
-            print(f"only outside circle")
-            #  2回目 (iteration_count=2)
-            show_circle(
-                outside_spots,
-                (cxo, cyo, ro),
-                img_name=img_name,
-                img_path=img_path,
-                iteration_count=2,
-            )
+            print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
+            if show:
+                #  2回目 (iteration_count=2)
+                show_circle(
+                    outside_spots,
+                    (cxo, cyo, ro),
+                    img_path=img_path,
+                    iteration_count=2,
+                    fig_info={"circle": "only points only"},
+                )
 
         not_sunspots_idx = []
         sunspot = False
 
         if debug:
-            print(f"外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
+            print(f"[INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
 
         for i in range(len(spots)):
             x = spots[i][0]
@@ -320,7 +341,9 @@ def MIN2_ignore_sunspots(
                 if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
                     min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
                     (
-                        print(f"x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}")
+                        print(
+                            f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}"
+                        )
                         if debug
                         else None
                     )
@@ -331,7 +354,9 @@ def MIN2_ignore_sunspots(
                 else:  # 円のRLTBのうちTBなら
                     min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
                     (
-                        print(f"x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}")
+                        print(
+                            f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}"
+                        )
                         if debug
                         else None
                     )
@@ -353,7 +378,6 @@ def MIN2_ignore_sunspots(
         show_circle(
             [spots[i] for i in not_sunspots_idx],
             (cx, cy, r),
-            img_name=img_name,
             img_path=img_path,
             is_last=True,
         )
@@ -363,9 +387,10 @@ def MIN2_ignore_sunspots(
 if __name__ == "__main__":
     from tkinter.filedialog import askopenfilename, askdirectory
 
-    if input("onefile(0)/dir(1)?:") == "1":
+    if input("[OPERATE]:onefile(0)/dir(1)?:") == "1":
 
         dirpath = askdirectory(title="フォルダを選択してください")
+        print(f"[INFO]:dir={dirpath}")
         import glob
         import os
 
@@ -376,17 +401,21 @@ if __name__ == "__main__":
         for file in files:
             img = cv2.imread(file, cv2.IMREAD_UNCHANGED)
             if img is None:
-                print(f"Failed to read image: {file}")
+                print(f"[ERROR]:Failed to read image: {file}")
                 break
-            result = MIN2_ignore_sunspots(img, show=True, debug=True, limb_wigth=60)
+            result = MIN2_ignore_sunspots(img, show=False, debug=False, limb_wigth=60)
             print((float(result[0]), float(result[1]), float(result[2])))
     else:
         picpath = askopenfilename(
             title="画像を選択してください",
             filetypes=[("Image files", "*.jpg;*.jpeg;*.png;*.tiff")],
         )
+        print(f"[INFO]:image={picpath}")
         from time import time
 
         start = time()
-        print(MIN2_ignore_sunspots(cv2.imread(picpath, 0), show=True, debug=True))
-        print(f"処理時間:{time()-start}秒")
+        img = cv2.imread(picpath, 0)
+        print(
+            f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath)}"
+        )
+        print(f"[INFO]:process time :{time()-start} s")
