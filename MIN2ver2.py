@@ -257,6 +257,74 @@ def show_circle(
     plt.show()
 
 
+def show_circle_simple(
+    spots: List[List[int]] = [],
+    cir_stat: Union[Tuple[float, float, float], List[float], bool] = False,
+    img_path: str = "",
+    iteration_count: Union[int, str] = 1,
+    is_last: bool = False,
+) -> None:
+    """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画して画面に表示する。
+
+    Args:
+        spots (List[List[int]], optional): 描画する縁の点の座標リスト。デフォルトは []。
+        cir_stat (Union[List[float], bool], optional): 近似円のステータス [cx, cy, R]。描画しない場合は False。デフォルトは False。
+
+    Returns:
+        None: 戻り値はありません（画像をウィンドウに表示します）。
+    """
+    fig, ax = plt.subplots()  # figとaxの作成
+    ax.imshow(img, cmap="magma")  # 画像をグレースケールで表示
+    if cir_stat != False:  # cir_statがFalseでないなら、円を描画
+        cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
+        circle = plt.Circle(
+            (cx, cy), R, fill=False, color="orange", linewidth=2
+        )  # 結果の円を描画
+        ax.add_patch(circle)  ###
+    if len(spots) > 0:
+        x, y = zip(*spots)
+        ax.scatter(x, y, color="red", label="Edges", s=50)
+    # 座標ラベルを表示
+    for xi, yi in zip(x, y):
+        ax.text(
+            xi,
+            yi,
+            f"({xi:.0f}, {yi:.0f})",
+            color="#8917fd",
+            fontsize=8,
+            ha="left",
+            va="bottom",
+        )
+    # ウィンドウ全体の上部に大きく表示
+    if img_path:
+        img_name = os.path.basename(img_path)
+    else:
+        img_name = "Unknown"
+    # is_last が True なら "Last"、それ以外は数値を表示
+    iter_text = "Last" if is_last else str(iteration_count)
+    fig.suptitle(
+        f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold"
+    )
+
+    # 画像の分割線を描画
+    lines = []
+    for xy in ["x", "y"]:  # 各分割線のlistを作成
+        lines.append([])
+        for nn in range(divnum):
+            ap = width / divnum if xy == "x" else height / divnum
+            lines[-1].append(ap * (nn + 1))
+    for li in lines[0]:  # x方向の分割線を描画
+        ax.axvline(int(li), color="white", linestyle="--", alpha=0.3)
+    for li in lines[1]:  # y方向の分割線を描画
+        ax.axhline(int(li), color="white", linestyle="--", alpha=0.3)
+
+    # nの値を左上に固定表示
+    ax.text(0.05, 0.9, f"n={divnum}", color="cyan", fontsize=10, transform=ax.transAxes)
+    ax.legend()  ###
+    ax.axis("equal")  ###
+    plt.show()  # windowで表示
+
+
 def MIN2_ignore_sunspots(
     readed_img: np.ndarray,
     n: int = 10,
@@ -265,6 +333,7 @@ def MIN2_ignore_sunspots(
     show: bool = False,
     debug: bool = False,
     img_path: str = "",
+    show_simple=False,
 ) -> Tuple[float, float, float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出する。
 
@@ -300,14 +369,18 @@ def MIN2_ignore_sunspots(
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx,cy,r}")
         if show:
-            # 1回目 (iteration_count=1)
-            show_circle(
-                spots,
-                (cx, cy, r),
-                img_path=img_path,
-                iteration_count=1,
-                fig_info={"circle": "first trial"},
-            )
+            if show_simple:
+                show_circle_simple(spots, (cx, cy, r),img_path=img_path,
+                                    iteration_count=1,)
+            else:
+                # 1回目 (iteration_count=1)
+                show_circle(
+                    spots,
+                    (cx, cy, r),
+                    img_path=img_path,
+                    iteration_count=1,
+                    fig_info={"circle": "first trial"},
+                )
 
     # ===一回目のMIN2の外側の点を抽出===
     outside_spots = []
@@ -320,13 +393,21 @@ def MIN2_ignore_sunspots(
             print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
             if show:
                 #  2回目 (iteration_count=2)
-                show_circle(
-                    outside_spots,
-                    (cxo, cyo, ro),
-                    img_path=img_path,
-                    iteration_count=2,
-                    fig_info={"circle": "only points only"},
-                )
+                if show_simple:
+                    show_circle_simple(
+                        outside_spots,
+                        (cxo, cyo, ro),
+                        img_path=img_path,
+                        iteration_count=2,
+                    )
+                else:
+                    show_circle(
+                        outside_spots,
+                        (cxo, cyo, ro),
+                        img_path=img_path,
+                        iteration_count=2,
+                        fig_info={"circle": "only points only"},
+                    )
 
         not_sunspots_idx = []
         sunspot = False
@@ -374,13 +455,22 @@ def MIN2_ignore_sunspots(
             )
 
     if show:
-        # 最終結果 (is_last=True)
-        show_circle(
-            [spots[i] for i in not_sunspots_idx],
-            (cx, cy, r),
-            img_path=img_path,
-            is_last=True,
-        )
+        if show_simple:
+
+            show_circle_simple(
+                [spots[i] for i in not_sunspots_idx],
+                (cx, cy, r),
+                img_path=img_path,
+                is_last=True,
+            )
+        else:
+            # 最終結果 (is_last=True)
+            show_circle(
+                [spots[i] for i in not_sunspots_idx],
+                (cx, cy, r),
+                img_path=img_path,
+                is_last=True,
+            )
     return cx, cy, r
 
 
@@ -416,6 +506,6 @@ if __name__ == "__main__":
         start = time()
         img = cv2.imread(picpath, 0)
         print(
-            f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath)}"
+            f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath,show_simple=True)}"
         )
         print(f"[INFO]:process time :{time()-start} s")
