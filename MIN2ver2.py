@@ -263,6 +263,7 @@ def show_circle_simple(
     img_path: str = "",
     iteration_count: Union[int, str] = 1,
     is_last: bool = False,
+    markersize: int = 400
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画して画面に表示する。
 
@@ -289,7 +290,7 @@ def show_circle_simple(
         ax.add_patch(circle)  ###
     if len(spots) > 0:
         x, y = zip(*spots)
-        ax.scatter(x, y, color=spot_C, label="Edges", s=400,linewidths=2,edgecolors="white")
+        ax.scatter(x, y, color=spot_C, label="Edges", s=markersize,linewidths=2,edgecolors="white")
     # ウィンドウ全体の上部に大きく表示
     if img_path:
         img_name = os.path.basename(img_path)
