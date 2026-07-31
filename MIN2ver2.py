@@ -273,28 +273,23 @@ def show_circle_simple(
     Returns:
         None: 戻り値はありません（画像をウィンドウに表示します）。
     """
+    
+    img_cmap="viridis"
+    circle_limbC="white"
+    spot_C="red"
+    
+    
     fig, ax = plt.subplots()  # figとaxの作成
-    ax.imshow(img, cmap="magma")  # 画像をグレースケールで表示
+    ax.imshow(img, cmap=img_cmap)  # 画像をグレースケールで表示
     if cir_stat != False:  # cir_statがFalseでないなら、円を描画
         cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
         circle = plt.Circle(
-            (cx, cy), R, fill=False, color="orange", linewidth=2
+            (cx, cy), R, fill=False, color=circle_limbC, linewidth=2
         )  # 結果の円を描画
         ax.add_patch(circle)  ###
     if len(spots) > 0:
         x, y = zip(*spots)
-        ax.scatter(x, y, color="red", label="Edges", s=50)
-    # 座標ラベルを表示
-    for xi, yi in zip(x, y):
-        ax.text(
-            xi,
-            yi,
-            f"({xi:.0f}, {yi:.0f})",
-            color="#8917fd",
-            fontsize=8,
-            ha="left",
-            va="bottom",
-        )
+        ax.scatter(x, y, color=spot_C, label="Edges", s=400,linewidths=2,edgecolors="white")
     # ウィンドウ全体の上部に大きく表示
     if img_path:
         img_name = os.path.basename(img_path)
@@ -314,9 +309,9 @@ def show_circle_simple(
             ap = width / divnum if xy == "x" else height / divnum
             lines[-1].append(ap * (nn + 1))
     for li in lines[0]:  # x方向の分割線を描画
-        ax.axvline(int(li), color="white", linestyle="--", alpha=0.3)
+        ax.axvline(int(li), color="white", linestyle="--", alpha=0.5)
     for li in lines[1]:  # y方向の分割線を描画
-        ax.axhline(int(li), color="white", linestyle="--", alpha=0.3)
+        ax.axhline(int(li), color="white", linestyle="--", alpha=0.5)
 
     # nの値を左上に固定表示
     ax.text(0.05, 0.9, f"n={divnum}", color="cyan", fontsize=10, transform=ax.transAxes)
