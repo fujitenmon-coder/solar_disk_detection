@@ -14,15 +14,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.0"  #  show_circle_simpleを追加、docstringを更新
-
-
-"""exsample of useing
-img_path=r"imgs/target"
-img=cv2.imread(img_path,cv2.IMREAD_UNCHANGED)
-cx,cy,r = MIN2_ignore_sunspots(img)
-"""
-
+version = "MIN2 v2.3.1"  #  fir_circleの点不足時問答無用plt.showを回避
 
 def cut_and_sampling(sun_threshold: float) -> list[list[int]]:
     """画像を分割線で走査し、輝度の変化（微分値）から太陽の縁（エッジ）に相当する点の座標をサンプリングする。
@@ -59,7 +51,7 @@ def cut_and_sampling(sun_threshold: float) -> list[list[int]]:
     return spots  # 縁の点の座標を返す
 
 
-def fit_circle(spots: list[list[int]] | np.ndarray) -> list[float]:
+def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[float]:
     """与えられた縁の点の座標群から、最小二乗法を用いて近似円の中心座標と半径を計算する。
 
     Args:
@@ -73,7 +65,9 @@ def fit_circle(spots: list[list[int]] | np.ndarray) -> list[float]:
     """
     if len(spots) < 3:
         print("[ERROR]:点が3点未満のため、円を作成できません。too little spots")
-        raise (f"点不足{show_circle(spots,False)}")
+        if show :
+            show_circle(spots, False)
+        raise ValueError("点不足")
     x, y = np.array([s[0] for s in spots], dtype=float), np.array(
         [s[1] for s in spots], dtype=float
     )
@@ -88,7 +82,7 @@ def fit_circle(spots: list[list[int]] | np.ndarray) -> list[float]:
 
 
 def show_circle(
-    spots: list[list[int]] | None = None,
+    spots: list[list[int]] | np.ndarray | None = None,
     cir_stat: tuple[float, float, float] | list[float] | bool = False,
     img_path: str = "",
     fig_info: dict[str, str] | None = None,
@@ -269,7 +263,7 @@ def show_circle(
 
 
 def show_circle_simple(
-    spots: list[list[int]] | None = None,
+    spots: list[list[int]] | np.ndarray | None = None,
     cir_stat: tuple[float, float, float] | list[float] | bool = False,
     img_path: str = "",
     iteration_count: int | str = 1,
@@ -298,7 +292,7 @@ def show_circle_simple(
 
     fig, ax = plt.subplots()  # figとaxの作成
     ax.imshow(img, cmap=img_cmap)  # 画像をグレースケールで表示
-    if cir_stat != False:  # cir_statがFalseでないなら、円を描画
+    if cir_stat != False :  # cir_statがFalseでないなら、円を描画
         cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
         circle = plt.Circle(  # pyright: ignore[reportPrivateImportUsage]
             (cx, cy), R, fill=False, color=circle_limbC, linewidth=2
@@ -389,7 +383,7 @@ def MIN2_ignore_sunspots(
     spots = cut_and_sampling(
         light_threshold
     )  # spots=[[x1,y1],[x2,y2],...]の形式で、縁の点の座標を格納したlist
-    cx, cy, r = fit_circle(spots)  # 一回目の円情報
+    cx, cy, r = fit_circle(spots, show)  # 一回目の円情報
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx,cy,r}")
         if show:
@@ -416,7 +410,7 @@ def MIN2_ignore_sunspots(
         if int(((spots[i][0] - cx) ** 2 + (spots[i][1] - cy) ** 2) ** (1 / 2)) > r:
             outside_spots.append(spots[i])
     if len(outside_spots) > 2:
-        cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float))
+        cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
         if debug:
             print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
             if show:
@@ -479,7 +473,7 @@ def MIN2_ignore_sunspots(
         if sunspot:
             # 黒点とみなされない点だけで円を作成
             cx, cy, r = fit_circle(
-                np.array([spots[i] for i in not_sunspots_idx], dtype=float)
+                np.array([spots[i] for i in not_sunspots_idx], dtype=float), show
             )
 
     if show:
