@@ -14,7 +14,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.2.2"  #  show_circleの可視化機能に画像メタデータと反復回数を追加
+version = "MIN2 v2.3.0"  #  show_circleの可視化機能に画像メタデータと反復回数を追加
 
 
 """exsample of useing
@@ -95,9 +95,20 @@ def show_circle(
     iteration_count: int | str = 1,
     is_last: bool = False,
 ) -> None:
-    """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、
-    さらに各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示する。
+    """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示します[cite: 1]。
+
+    Args:
+        spots (Optional[List[List[int]]]): 描画する縁の点の座標リスト[cite: 1]。デフォルトは None です[cite: 1]。
+        cir_stat (Union[Tuple[float, float, float], List[float], bool]): 近似円の情報 [cx, cy, R][cite: 1]。描画しない場合は False を指定します[cite: 1]。デフォルトは False です[cite: 1]。
+        img_path (str): 表示する画像のファイルパス[cite: 1]。デフォルトは空文字列です[cite: 1]。
+        fig_info (Optional[Dict[str, str]]): 画像内にテキストとして表示するメタデータ[cite: 1]。デフォルトは None です[cite: 1]。
+        iteration_count (Union[int, str]): 現在の反復回数[cite: 1]。デフォルトは 1 です[cite: 1]。
+        is_last (bool): 最後の処理かどうかを示すフラグ[cite: 1]。True の場合は反復回数の代わりに "Last" と表示します[cite: 1]。デフォルトは False です[cite: 1]。
+
+    Returns:
+        None: 戻り値はありません（画像をウィンドウに表示します）[cite: 1]。
     """
+
     # デフォルト引数のミュータブル回避
     if spots is None:
         spots = []
@@ -265,14 +276,18 @@ def show_circle_simple(
     is_last: bool = False,
     markersize: int = 400,
 ) -> None:
-    """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画して画面に表示する。
+    """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画してシンプルに画面に表示します[cite: 1]。
 
     Args:
-        spots (List[List[int]], optional): 描画する縁の点の座標リスト。デフォルトは []。
-        cir_stat (Union[List[float], bool], optional): 近似円のステータス [cx, cy, R]。描画しない場合は False。デフォルトは False。
+        spots (list[list[int]] | None): 描画する縁の点の座標リスト[cite: 1]。デフォルトは None です[cite: 1]。
+        cir_stat (tuple[float, float, float] | list[float] | bool): 近似円のステータス [cx, cy, R][cite: 1]。描画しない場合は False を指定します[cite: 1]。デフォルトは False です[cite: 1]。
+        img_path (str): 表示する画像のファイルパス[cite: 1]。デフォルトは空文字列です[cite: 1]。
+        iteration_count (int | str): 現在の反復回数[cite: 1]。デフォルトは 1 です[cite: 1]。
+        is_last (bool): 最後の処理かどうかを示すフラグ[cite: 1]。True の場合は "Last" と表示します[cite: 1]。デフォルトは False です[cite: 1]。
+        markersize (int): プロットする縁の点のマーカーサイズ[cite: 1]。デフォルトは 400 です[cite: 1]。
 
     Returns:
-        None: 戻り値はありません（画像をウィンドウに表示します）。
+        None: 戻り値はありません（画像をウィンドウに表示します）[cite: 1]。
     """
 
     if spots is None:
@@ -340,18 +355,22 @@ def MIN2_ignore_sunspots(
     img_path: str = "",
     show_simple=False,
 ) -> tuple[float, float, float]:
-    """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出する。
+    """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します[cite: 1]。
+
+    一度検出した近似円の外側にある点から再度円を近似し、その円の縁幅（limb_wigth*(2/3)）の範囲内にない内側の点を黒点とみなして除外します[cite: 1]。
 
     Args:
-        readed_img (np.ndarray): 読み込んだ入力画像（グレースケール画像）。
-        n (int, optional): 画像格子の分割数。デフォルトは 10。
-        light_threshold (int, optional): 太陽の明るさの基準しきい値。デフォルトは 50。
-        limb_wigth (int, optional): 太陽の縁の幅の基準値。デフォルトは 24。
-        show (bool, optional): 最終的な検出結果の画像を表示するかどうか。デフォルトは False。
-        debug (bool, optional): 各ステップ（1回目、外側のみ）の円描画やログを出力するかどうか。デフォルトは False。
+        readed_img (np.ndarray): 読み込んだ入力画像（グレースケール画像）[cite: 1]。
+        n (int): 画像格子の分割数[cite: 1]。デフォルトは 10 です[cite: 1]。
+        light_threshold (int): 太陽の明るさの基準しきい値[cite: 1]。デフォルトは 50 です[cite: 1]。
+        limb_wigth (int): 太陽の縁の幅の基準値[cite: 1]。デフォルトは 24 です[cite: 1]。
+        show (bool): 最終的な検出結果の画像を表示するかどうか[cite: 1]。デフォルトは False です[cite: 1]。
+        debug (bool): 各ステップ（1回目の円、外側の点のみの円など）の描画やログを出力するかどうか[cite: 1]。デフォルトは False です[cite: 1]。
+        img_path (str): 処理する画像のファイルパス[cite: 1]。デフォルトは空文字列です[cite: 1]。
+        show_simple (bool): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか[cite: 1]。デフォルトは False です[cite: 1]。
 
     Returns:
-        Tuple[float, float, float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
+        tuple[float, float, float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル[cite: 1]。
     """
     global divnum
     # ===基本的な変数をglobalで宣言===
