@@ -1,11 +1,11 @@
-import cv2
 import os
-from matplotlib.patches import Circle
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from typing import List, Tuple, Union, Optional, Dict
 from pprint import pformat
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import gridspec
+from matplotlib.patches import Circle
 
 """
 最小二乗法による円の検出を行う関数
@@ -24,7 +24,7 @@ cx,cy,r = MIN2_ignore_sunspots(img)
 """
 
 
-def cut_and_sampling(sun_threshold: Union[int, float]) -> List[List[int]]:
+def cut_and_sampling(sun_threshold: float) -> list[list[int]]:
     """画像を分割線で走査し、輝度の変化（微分値）から太陽の縁（エッジ）に相当する点の座標をサンプリングする。
 
     Args:
@@ -34,7 +34,7 @@ def cut_and_sampling(sun_threshold: Union[int, float]) -> List[List[int]]:
         List[List[int]]: サンプリングされた縁の座標 [x, y] のリスト。
     """
     # 画像を分割して実際の縁の点を収集
-    spots: List[List[int]] = []  # 実際の縁の点を格納するための配列
+    spots: list[list[int]] = []  # 実際の縁の点を格納するための配列
     for line_xy in ("x_line", "y_line"):  # x_lineは横線、y_lineは縦線
         for i in range(1, divnum):
             place = (
@@ -59,7 +59,7 @@ def cut_and_sampling(sun_threshold: Union[int, float]) -> List[List[int]]:
     return spots  # 縁の点の座標を返す
 
 
-def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
+def fit_circle(spots: list[list[int]] | np.ndarray) -> list[float]:
     """与えられた縁の点の座標群から、最小二乗法を用いて近似円の中心座標と半径を計算する。
 
     Args:
@@ -88,11 +88,11 @@ def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
 
 
 def show_circle(
-    spots: Optional[List[List[int]]] = None,
-    cir_stat: Union[Tuple[float, float, float], List[float], bool] = False,
+    spots: list[list[int]] | None = None,
+    cir_stat: tuple[float, float, float] | list[float] | bool = False,
     img_path: str = "",
-    fig_info: Optional[Dict[str, str]] = None,
-    iteration_count: Union[int, str] = 1,
+    fig_info: dict[str, str] | None = None,
+    iteration_count: int | str = 1,
     is_last: bool = False,
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、
@@ -258,12 +258,12 @@ def show_circle(
 
 
 def show_circle_simple(
-    spots: List[List[int]] = [],
-    cir_stat: Union[Tuple[float, float, float], List[float], bool] = False,
+    spots: list[list[int]] | None = None,
+    cir_stat: tuple[float, float, float] | list[float] | bool = False,
     img_path: str = "",
-    iteration_count: Union[int, str] = 1,
+    iteration_count: int | str = 1,
     is_last: bool = False,
-    markersize: int = 400
+    markersize: int = 400,
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画して画面に表示する。
 
@@ -274,23 +274,32 @@ def show_circle_simple(
     Returns:
         None: 戻り値はありません（画像をウィンドウに表示します）。
     """
-    
-    img_cmap="viridis"
-    circle_limbC="white"
-    spot_C="red"
-    
-    
+
+    if spots is None:
+        spots = []
+    img_cmap = "viridis"
+    circle_limbC = "white"
+    spot_C = "red"
+
     fig, ax = plt.subplots()  # figとaxの作成
     ax.imshow(img, cmap=img_cmap)  # 画像をグレースケールで表示
     if cir_stat != False:  # cir_statがFalseでないなら、円を描画
         cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
-        circle = plt.Circle(
+        circle = plt.Circle(  # pyright: ignore[reportPrivateImportUsage]
             (cx, cy), R, fill=False, color=circle_limbC, linewidth=2
         )  # 結果の円を描画
         ax.add_patch(circle)  ###
     if len(spots) > 0:
         x, y = zip(*spots)
-        ax.scatter(x, y, color=spot_C, label="Edges", s=markersize,linewidths=2,edgecolors="white")
+        ax.scatter(
+            x,
+            y,
+            color=spot_C,
+            label="Edges",
+            s=markersize,
+            linewidths=2,
+            edgecolors="white",
+        )
     # ウィンドウ全体の上部に大きく表示
     if img_path:
         img_name = os.path.basename(img_path)
@@ -330,7 +339,7 @@ def MIN2_ignore_sunspots(
     debug: bool = False,
     img_path: str = "",
     show_simple=False,
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出する。
 
     Args:
@@ -366,8 +375,12 @@ def MIN2_ignore_sunspots(
         print(f"[INFO]:trial circle (cx,cy,r)={cx,cy,r}")
         if show:
             if show_simple:
-                show_circle_simple(spots, (cx, cy, r),img_path=img_path,
-                                    iteration_count=1,)
+                show_circle_simple(
+                    spots,
+                    (cx, cy, r),
+                    img_path=img_path,
+                    iteration_count=1,
+                )
             else:
                 # 1回目 (iteration_count=1)
                 show_circle(
@@ -471,7 +484,7 @@ def MIN2_ignore_sunspots(
 
 
 if __name__ == "__main__":
-    from tkinter.filedialog import askopenfilename, askdirectory
+    from tkinter.filedialog import askdirectory, askopenfilename
 
     if input("[OPERATE]:onefile(0)/dir(1)?:") == "1":
 
