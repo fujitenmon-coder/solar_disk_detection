@@ -1,4 +1,5 @@
 import os
+import pathlib
 from pprint import pformat
 
 import cv2
@@ -14,23 +15,32 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.2"  #  fix: 画像が指定されていない場合のエラーハンドリングを追加
+version = "MIN2 v2.3.3"  #  feat: 画像の指示を引数に追加し、エラーハンドリングを強化
 
 
-def cut_and_sampling(sun_threshold: float) -> list[list[int]]:
+def cut_and_sampling(
+    img_inst: str | np.ndarray, sun_threshold: float
+) -> list[list[int]]:
     """画像を分割線で走査し、輝度の変化（微分値）から太陽の縁（エッジ）に相当する点の座標をサンプリングする。
 
     Args:
+        img_inst (Union[str, np.ndarray]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得する。もしくは読み込んだ画像。
         sun_threshold (Union[int, float]): 太陽像とみなす明るさのしきい値。これ以下の直線は処理をスキップする。
 
     Returns:
         List[List[int]]: サンプリングされた縁の座標 [x, y] のリスト。
     """
-    img = globals().get("img")
-    if img is None:
-        raise ValueError(
-            "画像が指定されていません。sample_imgを渡すか、グローバル変数imgを設定してください。"
-        )
+    if isinstance(img_inst, str):
+        if img_inst == "GLOBAL":
+            img = globals().get("img")
+            if img is None:
+                raise ValueError(
+                    "画像が指定されていません。imgを渡すか、グローバル変数imgを設定してください。"
+                )
+        else:
+            raise ValueError(f"Unknown instructions = {img_inst}")
+    else:
+        img = img_inst
 
     # 画像を分割して実際の縁の点を収集
     spots: list[list[int]] = []  # 実際の縁の点を格納するための配列
@@ -63,6 +73,7 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
 
     Args:
         spots (Union[List[List[int]], np.ndarray]): 縁の点の座標 [x, y] を格納した二次元配列、またはNumPy配列。
+        show (bool):例外発生時にshow_circleによる描画を行うか
 
     Raises:
         Exception: 与えられた座標が3点未満で円を確定できない場合に例外を発生させる。
@@ -73,7 +84,7 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
     if len(spots) < 3:
         print("[ERROR]:点が3点未満のため、円を作成できません。too little spots")
         if show:
-            show_circle(spots=spots, cir_stat=False)
+            show_circle(img_inst="GLOBAL", spots=spots, cir_stat=False)
         raise ValueError("点不足")
     x, y = np.array([s[0] for s in spots], dtype=float), np.array(
         [s[1] for s in spots], dtype=float
@@ -89,6 +100,7 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
 
 
 def show_circle(
+    img_inst: str | np.ndarray | pathlib.Path,
     spots: list[list[int]] | np.ndarray | None = None,
     cir_stat: tuple[float, float, float] | list[float] | bool = False,
     img_path: str = "",
@@ -99,9 +111,10 @@ def show_circle(
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示します。
 
     Args:
+        img_inst (Union[str, np.ndarray,pathlib.path]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得する。もしくは読み込んだ画像または画像のパス。
         spots (Optional[List[List[int]]]): 描画する縁の点の座標リスト。デフォルトは None です。
         cir_stat (Union[Tuple[float, float, float], List[float], bool]): 近似円の情報 [cx, cy, R]。描画しない場合は False を指定します。デフォルトは False です。
-        img_path (str): 表示する画像のファイルパス。デフォルトは空文字列です。
+        img_path (str): 画像のファイルパス。デフォルトは空文字列です。
         fig_info (Optional[Dict[str, str]]): 画像内にテキストとして表示するメタデータ。デフォルトは None です。
         iteration_count (Union[int, str]): 現在の反復回数。デフォルトは 1 です。
         is_last (bool): 最後の処理かどうかを示すフラグ。True の場合は反復回数の代わりに "Last" と表示します。デフォルトは False です。
@@ -109,6 +122,31 @@ def show_circle(
     Returns:
         None: 戻り値はありません（画像をウィンドウに表示します）。
     """
+
+    if isinstance(img_inst, str):
+        if img_inst == "GLOBAL":
+            img = globals().get("img")
+            if img is None:
+                raise ValueError(
+                    "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
+                )
+        else:
+            raise ValueError(f"Unknown instructions = {img_inst}")
+
+    elif isinstance(img_inst, pathlib.Path):
+        if img_inst.exists():
+            img = cv2.imread(str(img_inst), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                raise ValueError(
+                    "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
+                )
+        else:
+            raise ValueError(
+                "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
+            )
+
+    else:
+        img = img_inst
 
     # デフォルト引数のミュータブル回避
     if spots is None:
@@ -274,6 +312,7 @@ def show_circle(
 
 
 def show_circle_simple(
+    img_inst: str | np.ndarray | pathlib.Path,
     spots: list[list[int]] | np.ndarray | None = None,
     cir_stat: tuple[float, float, float] | list[float] | bool = False,
     img_path: str = "",
@@ -284,9 +323,10 @@ def show_circle_simple(
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画してシンプルに画面に表示します。
 
     Args:
+        img_inst (Union[str, np.ndarray,pathlib.path]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得する。もしくは読み込んだ画像または画像のパス。
         spots (list[list[int]] | None): 描画する縁の点の座標リスト。デフォルトは None です。
         cir_stat (tuple[float, float, float] | list[float] | bool): 近似円のステータス [cx, cy, R]。描画しない場合は False を指定します。デフォルトは False です。
-        img_path (str): 表示する画像のファイルパス。デフォルトは空文字列です。
+        img_path (str): 画像のファイルパス。デフォルトは空文字列です。
         iteration_count (int | str): 現在の反復回数。デフォルトは 1 です。
         is_last (bool): 最後の処理かどうかを示すフラグ。True の場合は "Last" と表示します。デフォルトは False です。
         markersize (int): プロットする縁の点のマーカーサイズ。デフォルトは 400 です。
@@ -294,6 +334,31 @@ def show_circle_simple(
     Returns:
         None: 戻り値はありません（画像をウィンドウに表示します）。
     """
+
+    if isinstance(img_inst, str):
+        if img_inst == "GLOBAL":
+            img = globals().get("img")
+            if img is None:
+                raise ValueError(
+                    "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
+                )
+        else:
+            raise ValueError(f"Unknown instructions = {img_inst}")
+
+    elif isinstance(img_inst, pathlib.Path):
+        if img_inst.exists():
+            img = cv2.imread(str(img_inst), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                raise ValueError(
+                    "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
+                )
+
+        else:
+            raise ValueError(
+                "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
+            )
+    else:
+        img = img_inst
 
     if spots is None:
         spots = []
@@ -393,7 +458,7 @@ def MIN2_ignore_sunspots(
         light_threshold = light_threshold * 256
     # 円の情報[cx, cy, R]
     spots = cut_and_sampling(
-        light_threshold
+        img_inst="GLOBAL", sun_threshold=light_threshold
     )  # spots=[[x1,y1],[x2,y2],...]の形式で、縁の点の座標を格納したlist
     cx, cy, r = fit_circle(spots, show)  # 一回目の円情報
     if debug:
@@ -401,14 +466,16 @@ def MIN2_ignore_sunspots(
         if show:
             if show_simple:
                 show_circle_simple(
-                    spots,
-                    (cx, cy, r),
+                    img_inst="GlOBAl",
+                    spots=spots,
+                    cir_stat=(cx, cy, r),
                     img_path=img_path,
                     iteration_count=1,
                 )
             else:
                 # 1回目 (iteration_count=1)
                 show_circle(
+                    img_inst="GLOBAL",
                     spots=spots,
                     cir_stat=(cx, cy, r),
                     img_path=img_path,
@@ -429,13 +496,15 @@ def MIN2_ignore_sunspots(
             #  2回目 (iteration_count=2)
             if show_simple:
                 show_circle_simple(
-                    outside_spots,
-                    (cxo, cyo, ro),
+                    img_inst="GLOBAL",
+                    spots=outside_spots,
+                    cir_stat=(cxo, cyo, ro),
                     img_path=img_path,
                     iteration_count=2,
                 )
             else:
                 show_circle(
+                    img_inst="GLOBAL",
                     spots=outside_spots,
                     cir_stat=(cxo, cyo, ro),
                     img_path=img_path,
@@ -488,6 +557,7 @@ def MIN2_ignore_sunspots(
         if show_simple:
 
             show_circle_simple(
+                img_inst="GLOBAL",
                 spots=[spots[i] for i in not_sunspots_idx],
                 cir_stat=(cx, cy, r),
                 img_path=img_path,
@@ -496,6 +566,7 @@ def MIN2_ignore_sunspots(
         else:
             # 最終結果 (is_last=True)
             show_circle(
+                img_inst="GLOBAL",
                 spots=[spots[i] for i in not_sunspots_idx],
                 cir_stat=(cx, cy, r),
                 img_path=img_path,
@@ -537,8 +608,8 @@ if __name__ == "__main__":
         img = cv2.imread(picpath, cv2.IMREAD_UNCHANGED)
         if not img is None:
             print(
-            f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath,show_simple=True)}"
-        )
+                f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath,show_simple=True)}"
+            )
         else:
             print(f"[ERROR]:reading img failed path={picpath}")
         print(f"[INFO]:process time :{time()-start} s")
