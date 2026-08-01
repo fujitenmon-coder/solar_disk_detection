@@ -14,7 +14,8 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.1"  #  fir_circleの点不足時問答無用plt.showを回避
+version = "MIN2 v2.3.2"  #  fix: 画像が指定されていない場合のエラーハンドリングを追加
+
 
 def cut_and_sampling(sun_threshold: float) -> list[list[int]]:
     """画像を分割線で走査し、輝度の変化（微分値）から太陽の縁（エッジ）に相当する点の座標をサンプリングする。
@@ -25,6 +26,12 @@ def cut_and_sampling(sun_threshold: float) -> list[list[int]]:
     Returns:
         List[List[int]]: サンプリングされた縁の座標 [x, y] のリスト。
     """
+    img = globals().get("img")
+    if img is None:
+        raise ValueError(
+            "画像が指定されていません。sample_imgを渡すか、グローバル変数imgを設定してください。"
+        )
+
     # 画像を分割して実際の縁の点を収集
     spots: list[list[int]] = []  # 実際の縁の点を格納するための配列
     for line_xy in ("x_line", "y_line"):  # x_lineは横線、y_lineは縦線
@@ -65,8 +72,8 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
     """
     if len(spots) < 3:
         print("[ERROR]:点が3点未満のため、円を作成できません。too little spots")
-        if show :
-            show_circle(spots, False)
+        if show:
+            show_circle(spots=spots, cir_stat=False)
         raise ValueError("点不足")
     x, y = np.array([s[0] for s in spots], dtype=float), np.array(
         [s[1] for s in spots], dtype=float
@@ -110,8 +117,9 @@ def show_circle(
     # 点がない場合は画像のみ表示
     if len(spots) == 0:
         fig, ax = plt.subplots()
-        ax.imshow(img, cmap="magma")
-        if cir_stat is not False and cir_stat is not None:
+        if img is not None:
+            ax.imshow(img, cmap="magma")
+        if not isinstance(cir_stat, bool) and cir_stat is not None:
             cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
             circle = Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
             ax.add_patch(circle)
@@ -153,10 +161,10 @@ def show_circle(
         va="bottom",
         fontsize=12,
     )
+    if not img is None:
+        ax_main.imshow(img, cmap="magma")
 
-    ax_main.imshow(img, cmap="magma")
-
-    if cir_stat is not False and cir_stat is not None:
+    if not isinstance(cir_stat, bool) and cir_stat is not None:
         cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
         circle = Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
         ax_main.add_patch(circle)
@@ -209,15 +217,18 @@ def show_circle(
     # === 各エッジ点付近の小グラフを作成 ===
     window_size = 15  # 抽出する近傍のサイズ（前後15ピクセル）
 
+    line_data = np.linspace(0, 0, window_size * 2)
     for idx, (xi, yi) in enumerate(zip(x, y)):
         # 横線(x_line)上の点か、縦線(y_line)上の点かを判定
         is_x_line = any(yi == height * i // divnum for i in range(1, divnum))
 
         if is_x_line:
-            line_data = img[yi, :].astype(float)
+            if not img is None:
+                line_data = img[yi, :].astype(float)
             center_idx = xi
         else:  # y_line
-            line_data = img[:, xi].astype(float)
+            if not img is None:
+                line_data = img[:, xi].astype(float)
             center_idx = yi
 
         # 中心から前後15ピクセル分を切り出す
@@ -291,8 +302,9 @@ def show_circle_simple(
     spot_C = "red"
 
     fig, ax = plt.subplots()  # figとaxの作成
-    ax.imshow(img, cmap=img_cmap)  # 画像をグレースケールで表示
-    if cir_stat != False :  # cir_statがFalseでないなら、円を描画
+    if not img is None:
+        ax.imshow(img, cmap=img_cmap)  # 画像をグレースケールで表示
+    if not isinstance(cir_stat, bool):  # cir_statがFalseでないなら、円を描画
         cx, cy, R = cir_stat[0], cir_stat[1], cir_stat[2]
         circle = plt.Circle(  # pyright: ignore[reportPrivateImportUsage]
             (cx, cy), R, fill=False, color=circle_limbC, linewidth=2
@@ -397,8 +409,8 @@ def MIN2_ignore_sunspots(
             else:
                 # 1回目 (iteration_count=1)
                 show_circle(
-                    spots,
-                    (cx, cy, r),
+                    spots=spots,
+                    cir_stat=(cx, cy, r),
                     img_path=img_path,
                     iteration_count=1,
                     fig_info={"circle": "first trial"},
@@ -409,87 +421,83 @@ def MIN2_ignore_sunspots(
     for i in range(len(spots)):
         if int(((spots[i][0] - cx) ** 2 + (spots[i][1] - cy) ** 2) ** (1 / 2)) > r:
             outside_spots.append(spots[i])
-    if len(outside_spots) > 2:
-        cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
-        if debug:
-            print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
-            if show:
-                #  2回目 (iteration_count=2)
-                if show_simple:
-                    show_circle_simple(
-                        outside_spots,
-                        (cxo, cyo, ro),
-                        img_path=img_path,
-                        iteration_count=2,
-                    )
+
+    cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
+    if debug:
+        print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
+        if show:
+            #  2回目 (iteration_count=2)
+            if show_simple:
+                show_circle_simple(
+                    outside_spots,
+                    (cxo, cyo, ro),
+                    img_path=img_path,
+                    iteration_count=2,
+                )
+            else:
+                show_circle(
+                    spots=outside_spots,
+                    cir_stat=(cxo, cyo, ro),
+                    img_path=img_path,
+                    iteration_count=2,
+                    fig_info={"circle": "only points only"},
+                )
+
+    not_sunspots_idx = []
+    sunspot = False
+
+    if debug:
+        print(f"[INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
+
+    for i in range(len(spots)):
+        x = spots[i][0]
+        y = spots[i][1]
+        if not spots[i] in outside_spots:  # 内側の点だけ
+            if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
+                min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
+                (
+                    print(f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}")
+                    if debug
+                    else None
+                )
+                if min2far - np.abs(cxo - x) < limb_wigth * (2 / 3):
+                    not_sunspots_idx += [i]
                 else:
-                    show_circle(
-                        outside_spots,
-                        (cxo, cyo, ro),
-                        img_path=img_path,
-                        iteration_count=2,
-                        fig_info={"circle": "only points only"},
-                    )
+                    sunspot = True
+            else:  # 円のRLTBのうちTBなら
+                min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
+                (
+                    print(f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}")
+                    if debug
+                    else None
+                )
+                if min2far - np.abs(cyo - y) < limb_wigth * (2 / 3):
+                    not_sunspots_idx += [i]
+                else:
+                    sunspot = True
+        else:  # 外側の点は全てnot_sunspots_idxに入れる
+            not_sunspots_idx += [i]
 
-        not_sunspots_idx = []
-        sunspot = False
-
-        if debug:
-            print(f"[INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
-
-        for i in range(len(spots)):
-            x = spots[i][0]
-            y = spots[i][1]
-            if not spots[i] in outside_spots:  # 内側の点だけ
-                if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
-                    min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
-                    (
-                        print(
-                            f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}"
-                        )
-                        if debug
-                        else None
-                    )
-                    if min2far - np.abs(cxo - x) < limb_wigth * (2 / 3):
-                        not_sunspots_idx += [i]
-                    else:
-                        sunspot = True
-                else:  # 円のRLTBのうちTBなら
-                    min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
-                    (
-                        print(
-                            f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}"
-                        )
-                        if debug
-                        else None
-                    )
-                    if min2far - np.abs(cyo - y) < limb_wigth * (2 / 3):
-                        not_sunspots_idx += [i]
-                    else:
-                        sunspot = True
-            else:  # 外側の点は全てnot_sunspots_idxに入れる
-                not_sunspots_idx += [i]
-
-        if sunspot:
-            # 黒点とみなされない点だけで円を作成
-            cx, cy, r = fit_circle(
-                np.array([spots[i] for i in not_sunspots_idx], dtype=float), show
-            )
+    if sunspot:
+        # 黒点とみなされない点だけで円を作成
+        cx, cy, r = fit_circle(
+            np.array([spots[i] for i in not_sunspots_idx], dtype=float), show
+        )
 
     if show:
         if show_simple:
 
             show_circle_simple(
-                [spots[i] for i in not_sunspots_idx],
-                (cx, cy, r),
+                spots=[spots[i] for i in not_sunspots_idx],
+                cir_stat=(cx, cy, r),
                 img_path=img_path,
                 is_last=True,
             )
         else:
             # 最終結果 (is_last=True)
             show_circle(
-                [spots[i] for i in not_sunspots_idx],
-                (cx, cy, r),
+                spots=[spots[i] for i in not_sunspots_idx],
+                cir_stat=(cx, cy, r),
                 img_path=img_path,
                 is_last=True,
             )
@@ -526,8 +534,11 @@ if __name__ == "__main__":
         from time import time
 
         start = time()
-        img = cv2.imread(picpath, 0)
-        print(
+        img = cv2.imread(picpath, cv2.IMREAD_UNCHANGED)
+        if not img is None:
+            print(
             f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath,show_simple=True)}"
         )
+        else:
+            print(f"[ERROR]:reading img failed path={picpath}")
         print(f"[INFO]:process time :{time()-start} s")
