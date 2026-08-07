@@ -100,10 +100,10 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
 
 
 def show_circle(
-    img_inst: str | np.ndarray | pathlib.Path,
+    img_inst: str | np.ndarray,
     spots: list[list[int]] | np.ndarray | None = None,
     cir_stat: tuple[float, float, float] | list[float] | bool = False,
-    img_path: str = "",
+    img_path: pathlib.Path | None = None,
     fig_info: dict[str, str] | None = None,
     iteration_count: int | str = 1,
     is_last: bool = False,
@@ -111,10 +111,10 @@ def show_circle(
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示します。
 
     Args:
-        img_inst (Union[str, np.ndarray,pathlib.path]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得する。もしくは読み込んだ画像または画像のパス。
+        img_inst (Union[str, np.ndarray]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得し、"PATH"ならimg_pathから画像を読み込む。もしくは読み込んだ画像。
         spots (Optional[List[List[int]]]): 描画する縁の点の座標リスト。デフォルトは None です。
         cir_stat (Union[Tuple[float, float, float], List[float], bool]): 近似円の情報 [cx, cy, R]。描画しない場合は False を指定します。デフォルトは False です。
-        img_path (str): 画像のファイルパス。デフォルトは空文字列です。
+        img_path (pathlib.path): 画像のファイルパス。デフォルトはNoneです。
         fig_info (Optional[Dict[str, str]]): 画像内にテキストとして表示するメタデータ。デフォルトは None です。
         iteration_count (Union[int, str]): 現在の反復回数。デフォルトは 1 です。
         is_last (bool): 最後の処理かどうかを示すフラグ。True の場合は反復回数の代わりに "Last" と表示します。デフォルトは False です。
@@ -130,24 +130,28 @@ def show_circle(
                 raise ValueError(
                     "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
                 )
-        else:
-            raise ValueError(f"Unknown instructions = {img_inst}")
 
-    elif isinstance(img_inst, pathlib.Path):
-        if img_inst.exists():
-            img = cv2.imread(str(img_inst), cv2.IMREAD_UNCHANGED)
-            if img is None:
+        elif img_inst == "PATH":
+            if img_path != None:
+                img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
+                if img is None:
+                    raise ValueError(
+                        "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
+                    )
+            else:
                 raise ValueError(
                     "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
                 )
-        else:
-            raise ValueError(
-                "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
-            )
 
+        else:
+            raise ValueError(f"Unknown instructions = {img_inst}")
     else:
         img = img_inst
 
+    if img_path is not None:
+        img_path_str = str(img_path)
+    else:
+        img_path_str = None
     # デフォルト引数のミュータブル回避
     if spots is None:
         spots = []
@@ -312,10 +316,10 @@ def show_circle(
 
 
 def show_circle_simple(
-    img_inst: str | np.ndarray | pathlib.Path,
+    img_inst: str | np.ndarray,
     spots: list[list[int]] | np.ndarray | None = None,
     cir_stat: tuple[float, float, float] | list[float] | bool = False,
-    img_path: str = "",
+    img_path: pathlib.Path | None = None,
     iteration_count: int | str = 1,
     is_last: bool = False,
     markersize: int = 400,
@@ -323,10 +327,10 @@ def show_circle_simple(
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画してシンプルに画面に表示します。
 
     Args:
-        img_inst (Union[str, np.ndarray,pathlib.path]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得する。もしくは読み込んだ画像または画像のパス。
+        img_inst (Union[str, np.ndarray]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得し、"PATH"ならimg_pathから画像を読み込む。もしくは読み込んだ画像。
         spots (list[list[int]] | None): 描画する縁の点の座標リスト。デフォルトは None です。
         cir_stat (tuple[float, float, float] | list[float] | bool): 近似円のステータス [cx, cy, R]。描画しない場合は False を指定します。デフォルトは False です。
-        img_path (str): 画像のファイルパス。デフォルトは空文字列です。
+        img_path (pathlib.path): 画像のファイルパス。デフォルトはNoneです。
         iteration_count (int | str): 現在の反復回数。デフォルトは 1 です。
         is_last (bool): 最後の処理かどうかを示すフラグ。True の場合は "Last" と表示します。デフォルトは False です。
         markersize (int): プロットする縁の点のマーカーサイズ。デフォルトは 400 です。
@@ -342,21 +346,21 @@ def show_circle_simple(
                 raise ValueError(
                     "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
                 )
-        else:
-            raise ValueError(f"Unknown instructions = {img_inst}")
 
-    elif isinstance(img_inst, pathlib.Path):
-        if img_inst.exists():
-            img = cv2.imread(str(img_inst), cv2.IMREAD_UNCHANGED)
-            if img is None:
+        elif img_inst == "PATH":
+            if img_path != None:
+                img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
+                if img is None:
+                    raise ValueError(
+                        "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
+                    )
+            else:
                 raise ValueError(
                     "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
                 )
 
         else:
-            raise ValueError(
-                "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
-            )
+            raise ValueError(f"Unknown instructions = {img_inst}")
     else:
         img = img_inst
 
@@ -417,13 +421,13 @@ def show_circle_simple(
 
 
 def MIN2_ignore_sunspots(
-    readed_img: np.ndarray,
+    img_inst: np.ndarray|str="PATH",
     n: int = 10,
     light_threshold: int = 50,
     limb_wigth: int = 24,
     show: bool = False,
     debug: bool = False,
-    img_path: str = "",
+    img_path: pathlib.Path|str = "",
     show_simple=False,
 ) -> tuple[float, float, float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
@@ -431,18 +435,33 @@ def MIN2_ignore_sunspots(
     一度検出した近似円の外側にある点から再度円を近似し、その円の縁幅（limb_wigth*(2/3)）の範囲内にない内側の点を黒点とみなして除外します。
 
     Args:
-        readed_img (np.ndarray): 読み込んだ入力画像（グレースケール画像）。
+        readed_img (Union[np.ndarray,str]): 読み込んだ入力画像（グレースケール画像）または読み込み指示("PATH"ならimg_pathを読み込む)。
         n (int): 画像格子の分割数。デフォルトは 10 です。
         light_threshold (int): 太陽の明るさの基準しきい値。デフォルトは 50 です。
         limb_wigth (int): 太陽の縁の幅の基準値。デフォルトは 24 です。
         show (bool): 最終的な検出結果の画像を表示するかどうか。デフォルトは False です。
         debug (bool): 各ステップ（1回目の円、外側の点のみの円など）の描画やログを出力するかどうか。デフォルトは False です。
-        img_path (str): 処理する画像のファイルパス。デフォルトは空文字列です。
+        img_path (Union[pathlib.Path,str]): 処理する画像のファイルパス。デフォルトは空文字列です。
         show_simple (bool): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。デフォルトは False です。
 
     Returns:
         tuple[float, float, float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
     """
+    if isinstance(img_path,str):
+        img_path=pathlib.Path(img_path)
+        if not img_path.exists():
+            raise ValueError("そのパスの画像は存在しません。")
+    
+    if isinstance(img_inst,str):
+        if img_inst == "PATH":
+            readed_img=cv2.imread(str(img_path),cv2.IMREAD_UNCHANGED)
+            if readed_img is None:
+                raise ValueError("画像の読み込みに失敗しました。")
+        else:
+            raise ValueError(f"Unknown instructions = {img_inst}")
+    else:
+        readed_img=img_inst
+            
     global divnum
     # ===基本的な変数をglobalで宣言===
     global divnum  # 分割数、引数ではnとして受け取っている。
