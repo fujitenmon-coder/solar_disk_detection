@@ -107,6 +107,7 @@ def show_circle(
     fig_info: dict[str, str] | None = None,
     iteration_count: int | str = 1,
     is_last: bool = False,
+    simple: bool = False
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示します。
 
@@ -118,10 +119,21 @@ def show_circle(
         fig_info (Optional[Dict[str, str]]): 画像内にテキストとして表示するメタデータ。デフォルトは None です。
         iteration_count (Union[int, str]): 現在の反復回数。デフォルトは 1 です。
         is_last (bool): 最後の処理かどうかを示すフラグ。True の場合は反復回数の代わりに "Last" と表示します。デフォルトは False です。
-
+        simple (bool): シンプルな表示(ポスター図用)を作成するフラグ。 デフォルトはFalse.
     Returns:
         None: 戻り値はありません（画像をウィンドウに表示します）。
     """
+
+    if simple:
+        show_circle_simple(
+                    img_inst=img_inst,
+                    spots=spots,
+                    cir_stat=cir_stat,
+                    img_path=img_path,
+                    iteration_count=iteration_count,
+                    is_last=is_last
+                )
+        return None
 
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
@@ -485,24 +497,15 @@ def MIN2_ignore_sunspots(
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx,cy,r}")
         if show:
-            if show_simple:
-                show_circle_simple(
-                    img_inst="GlOBAl",
-                    spots=spots,
-                    cir_stat=(cx, cy, r),
-                    img_path=img_path,
-                    iteration_count=1,
-                )
-            else:
-                # 1回目 (iteration_count=1)
-                show_circle(
-                    img_inst="GLOBAL",
-                    spots=spots,
-                    cir_stat=(cx, cy, r),
-                    img_path=img_path,
-                    iteration_count=1,
-                    fig_info={"circle": "first trial"},
-                )
+            show_circle(
+                img_inst="GLOBAL",
+                spots=spots,
+                cir_stat=(cx, cy, r),
+                img_path=img_path,
+                iteration_count=1,
+                fig_info={"circle": "first trial"},
+                simple=show_simple
+            )
     for iter in range(iter_cycles+1):
     # ===一回目のMIN2の外側の点を抽出===
     outside_spots = []
@@ -514,24 +517,15 @@ def MIN2_ignore_sunspots(
     if debug:
         print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
         if show:
-            #  2回目 (iteration_count=2)
-            if show_simple:
-                show_circle_simple(
-                    img_inst="GLOBAL",
-                    spots=outside_spots,
-                    cir_stat=(cxo, cyo, ro),
-                    img_path=img_path,
-                    iteration_count=2,
-                )
-            else:
-                show_circle(
-                    img_inst="GLOBAL",
-                    spots=outside_spots,
-                    cir_stat=(cxo, cyo, ro),
-                    img_path=img_path,
-                    iteration_count=2,
-                    fig_info={"circle": "only points only"},
-                )
+            show_circle(
+                img_inst="GLOBAL",
+                spots=outside_spots,
+                cir_stat=(cxo, cyo, ro),
+                img_path=img_path,
+                iteration_count=iter_cycles,
+                fig_info={"circle": "only points only"},
+                simple=show_simple
+            )
 
     not_sunspots_idx = []
     sunspot = False
@@ -576,24 +570,15 @@ def MIN2_ignore_sunspots(
     else:
         
     if show:
-        if show_simple:
-
-            show_circle_simple(
-                img_inst="GLOBAL",
-                spots=[spots[i] for i in not_sunspots_idx],
-                cir_stat=(cx, cy, r),
-                img_path=img_path,
-                is_last=True,
-            )
-        else:
-            # 最終結果 (is_last=True)
-            show_circle(
-                img_inst="GLOBAL",
-                spots=[spots[i] for i in not_sunspots_idx],
-                cir_stat=(cx, cy, r),
-                img_path=img_path,
-                is_last=True,
-            )
+        # 最終結果 (is_last=True)
+        show_circle(
+            img_inst="GLOBAL",
+            spots=[spots[i] for i in not_sunspots_idx],
+            cir_stat=(cx, cy, r),
+            img_path=img_path,
+            is_last=True,
+            simple=show_simple
+        )
     return (cx, cy), r
 
 
