@@ -15,7 +15,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.5"  #re:MIN2_ver2.1(複数の黒点に対応するmin2_ignore 09e46d790b06164adec7b55f1a2656d9b1ed4083)
+version = "MIN2 v2.3.6"  #refactor range(len())からの脱却および縁の点の扱いの構造を粋に
 
 def cut_and_sampling(
     img_inst: str | np.ndarray, sun_threshold: float
@@ -475,7 +475,6 @@ def MIN2_ignore_sunspots(
     else:
         readed_img=img_inst
             
-    global divnum
     # ===基本的な変数をglobalで宣言===
     global divnum  # 分割数、引数ではnとして受け取っている。
     divnum = n
@@ -506,14 +505,22 @@ def MIN2_ignore_sunspots(
                 simple=show_simple
             )
 
+    all_sunspots=[]
+    safe_points=spots
     for iter in range(iter_cycles+2):
         if debug:
             print(f"iter: {iter}")
         outside_spots = []
-        for point in spots:
+        inside_spots = []
+        for point in safe_points:
             x,y=point
             if int(((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r:
                 outside_spots.append(point)
+            else:
+                inside_spots.append(point)
+
+            #inside_spotsから発見された黒点をindexで管理するため
+            safe_points=inside_spots+outside_spots
 
         cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
         if debug:
@@ -529,42 +536,39 @@ def MIN2_ignore_sunspots(
                     simple=show_simple
                 )
 
-        not_sunspots_idx = []
-        sunspot = False
+        sunspots = []
 
         if debug:
             print(f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
- 
-        for i,point in enumerate(spots):
-            x,y = point 
-            # TODO:inside_spotsをつくる
-            if not point in outside_spots:  # 内側の点だけ
-                if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
-                    min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
-                    if debug:
-                        print(f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}")
-                        
-                    if min2far - np.abs(cxo - x) < limb_wigth * (2 / 3):
-                        not_sunspots_idx += [i]
-                    else:
-                        sunspot = True
-                else:  # 円のRLTBのうちTBなら
-                    min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
-                    if debug:
-                        print(f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}")
-                        
-                    if min2far - np.abs(cyo - y) < limb_wigth * (2 / 3):
-                        not_sunspots_idx += [i]
-                    else:
-                        sunspot = True
-            else:  # 外側の点は全てnot_sunspots_idxに入れる
-                not_sunspots_idx += [i]
 
-        if sunspot:
+        for i,point in enumerate(inside_spots):
+            x,y = point 
+
+            if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
+                min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
+                if debug:
+                    print(f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}")
+                    
+                if min2far - np.abs(cxo - x) > limb_wigth * (2 / 3):
+                    sunspots.append(i)
+
+            else:  # 円のRLTBのうちTBなら
+                min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
+                if debug:
+                    print(f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}")
+                    
+                if min2far - np.abs(cyo - y) > limb_wigth * (2 / 3):
+                    sunspots.append(i)
+
+        for i in sunspots:
+            all_sunspots.append(safe_points.pop(i))
+
+        if sunspots:
             # 黒点とみなされない点だけで円を作成
             cx, cy, r = fit_circle(
-                np.array([spots[i] for i in not_sunspots_idx], dtype=float), show
+                np.array(safe_points, dtype=float), show
             )
+            
         else:
             break
         
@@ -572,7 +576,7 @@ def MIN2_ignore_sunspots(
         # 最終結果 (is_last=True)
         show_circle(
             img_inst="GLOBAL",
-            spots=[spots[i] for i in not_sunspots_idx],
+            spots=safe_points,
             cir_stat=(cx, cy, r),
             img_path=img_path,
             is_last=True,
