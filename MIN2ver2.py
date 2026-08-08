@@ -15,8 +15,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.4"  # re:cir_statの中身の順番を間違える事故が発生するので、MIN2の戻り値を((cx,cy),r)としてcirstatはこの形式とします。
-
+version = "MIN2 v2.3.5"  #re:MIN2_ver2.1(複数の黒点に対応するmin2_ignore 09e46d790b06164adec7b55f1a2656d9b1ed4083)
 
 def cut_and_sampling(
     img_inst: str | np.ndarray, sun_threshold: float
@@ -506,68 +505,72 @@ def MIN2_ignore_sunspots(
                 fig_info={"circle": "first trial"},
                 simple=show_simple
             )
-    for iter in range(iter_cycles+1):
-    # ===一回目のMIN2の外側の点を抽出===
-    outside_spots = []
-    for i in range(len(spots)):
-        if int(((spots[i][0] - cx) ** 2 + (spots[i][1] - cy) ** 2) ** (1 / 2)) > r:
-            outside_spots.append(spots[i])
 
-    cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
-    if debug:
-        print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
-        if show:
-            show_circle(
-                img_inst="GLOBAL",
-                spots=outside_spots,
-                cir_stat=(cxo, cyo, ro),
-                img_path=img_path,
-                iteration_count=iter_cycles,
-                fig_info={"circle": "only points only"},
-                simple=show_simple
+    for iter in range(iter_cycles+2):
+        if debug:
+            print(f"iter: {iter}")
+        outside_spots = []
+        for i in range(len(spots)):
+            if int(((spots[i][0] - cx) ** 2 + (spots[i][1] - cy) ** 2) ** (1 / 2)) > r:
+                outside_spots.append(spots[i])
+
+        cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
+        if debug:
+            print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
+            if show:
+                show_circle(
+                    img_inst="GLOBAL",
+                    spots=outside_spots,
+                    cir_stat=(cxo, cyo, ro),
+                    img_path=img_path,
+                    iteration_count=iter_cycles,
+                    fig_info={"circle": "only points only"},
+                    simple=show_simple
+                )
+
+        not_sunspots_idx = []
+        sunspot = False
+
+        if debug:
+            print(f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
+
+        for i in range(len(spots)):
+            x = spots[i][0]
+            y = spots[i][1]
+            if not spots[i] in outside_spots:  # 内側の点だけ
+                if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
+                    min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
+                    (
+                        print(f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}")
+                        if debug
+                        else None
+                    )
+                    if min2far - np.abs(cxo - x) < limb_wigth * (2 / 3):
+                        not_sunspots_idx += [i]
+                    else:
+                        sunspot = True
+                else:  # 円のRLTBのうちTBなら
+                    min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
+                    (
+                        print(f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}")
+                        if debug
+                        else None
+                    )
+                    if min2far - np.abs(cyo - y) < limb_wigth * (2 / 3):
+                        not_sunspots_idx += [i]
+                    else:
+                        sunspot = True
+            else:  # 外側の点は全てnot_sunspots_idxに入れる
+                not_sunspots_idx += [i]
+
+        if sunspot:
+            # 黒点とみなされない点だけで円を作成
+            cx, cy, r = fit_circle(
+                np.array([spots[i] for i in not_sunspots_idx], dtype=float), show
             )
-
-    not_sunspots_idx = []
-    sunspot = False
-
-    if debug:
-        print(f"[INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
-
-    for i in range(len(spots)):
-        x = spots[i][0]
-        y = spots[i][1]
-        if not spots[i] in outside_spots:  # 内側の点だけ
-            if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
-                min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
-                (
-                    print(f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}")
-                    if debug
-                    else None
-                )
-                if min2far - np.abs(cxo - x) < limb_wigth * (2 / 3):
-                    not_sunspots_idx += [i]
-                else:
-                    sunspot = True
-            else:  # 円のRLTBのうちTBなら
-                min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
-                (
-                    print(f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}")
-                    if debug
-                    else None
-                )
-                if min2far - np.abs(cyo - y) < limb_wigth * (2 / 3):
-                    not_sunspots_idx += [i]
-                else:
-                    sunspot = True
-        else:  # 外側の点は全てnot_sunspots_idxに入れる
-            not_sunspots_idx += [i]
-
-    if sunspot:
-        # 黒点とみなされない点だけで円を作成
-        cx, cy, r = fit_circle(
-            np.array([spots[i] for i in not_sunspots_idx], dtype=float), show
-        )
-    else:
+            spots=[spots[i] for i in not_sunspots_idx]
+        else:
+            break
         
     if show:
         # 最終結果 (is_last=True)
