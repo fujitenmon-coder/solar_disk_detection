@@ -425,6 +425,7 @@ def MIN2_ignore_sunspots(
     n: int = 10,
     light_threshold: int = 50,
     limb_wigth: int = 24,
+    iter_cycles: int = 2,
     show: bool = False,
     debug: bool = False,
     img_path: pathlib.Path|str = "",
@@ -439,6 +440,7 @@ def MIN2_ignore_sunspots(
         n (int): 画像格子の分割数。デフォルトは 10 です。
         light_threshold (int): 太陽の明るさの基準しきい値。デフォルトは 50 です。
         limb_wigth (int): 太陽の縁の幅の基準値。デフォルトは 24 です。
+        iter_cycles (int): 黒点排除のイテレーション回数。複数の黒点に対応できます。0なら排除なし。デフォルトは2。
         show (bool): 最終的な検出結果の画像を表示するかどうか。デフォルトは False です。
         debug (bool): 各ステップ（1回目の円、外側の点のみの円など）の描画やログを出力するかどうか。デフォルトは False です。
         img_path (Union[pathlib.Path,str]): 処理する画像のファイルパス。デフォルトは空文字列です。
@@ -501,7 +503,7 @@ def MIN2_ignore_sunspots(
                     iteration_count=1,
                     fig_info={"circle": "first trial"},
                 )
-
+    for iter in range(iter_cycles+1):
     # ===一回目のMIN2の外側の点を抽出===
     outside_spots = []
     for i in range(len(spots)):
@@ -571,7 +573,8 @@ def MIN2_ignore_sunspots(
         cx, cy, r = fit_circle(
             np.array([spots[i] for i in not_sunspots_idx], dtype=float), show
         )
-
+    else:
+        
     if show:
         if show_simple:
 
