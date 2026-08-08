@@ -15,7 +15,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.3"  #  feat: 画像の指示を引数に追加し、エラーハンドリングを強化
+version = "MIN2 v2.3.4"  # re:cir_statの中身の順番を間違える事故が発生するので、MIN2の戻り値を((cx,cy),r)としてcirstatはこの形式とします。
 
 
 def cut_and_sampling(
@@ -429,7 +429,7 @@ def MIN2_ignore_sunspots(
     debug: bool = False,
     img_path: pathlib.Path|str = "",
     show_simple=False,
-) -> tuple[float, float, float]:
+) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
     一度検出した近似円の外側にある点から再度円を近似し、その円の縁幅（limb_wigth*(2/3)）の範囲内にない内側の点を黒点とみなして除外します。
@@ -445,7 +445,7 @@ def MIN2_ignore_sunspots(
         show_simple (bool): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。デフォルトは False です。
 
     Returns:
-        tuple[float, float, float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
+        tuple[tuple[float, float], float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
     """
     if isinstance(img_path,str):
         img_path=pathlib.Path(img_path)
@@ -591,7 +591,7 @@ def MIN2_ignore_sunspots(
                 img_path=img_path,
                 is_last=True,
             )
-    return cx, cy, r
+    return (cx, cy), r
 
 
 if __name__ == "__main__":
@@ -613,7 +613,8 @@ if __name__ == "__main__":
             if img is None:
                 print(f"[ERROR]:Failed to read image: {file}")
                 break
-            result = MIN2_ignore_sunspots(img, show=False, debug=False, limb_wigth=60)
+            (cx,cy),r = MIN2_ignore_sunspots(img, show=False, debug=False, limb_wigth=60)
+            result=cx,cy,r
             print((float(result[0]), float(result[1]), float(result[2])))
     else:
         picpath = askopenfilename(
