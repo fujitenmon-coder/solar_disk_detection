@@ -510,9 +510,10 @@ def MIN2_ignore_sunspots(
         if debug:
             print(f"iter: {iter}")
         outside_spots = []
-        for i in range(len(spots)):
-            if int(((spots[i][0] - cx) ** 2 + (spots[i][1] - cy) ** 2) ** (1 / 2)) > r:
-                outside_spots.append(spots[i])
+        for point in spots:
+            x,y=point
+            if int(((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r:
+                outside_spots.append(point)
 
         cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
         if debug:
@@ -533,29 +534,25 @@ def MIN2_ignore_sunspots(
 
         if debug:
             print(f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
-
-        for i in range(len(spots)):
-            x = spots[i][0]
-            y = spots[i][1]
-            if not spots[i] in outside_spots:  # 内側の点だけ
+ 
+        for i,point in enumerate(spots):
+            x,y = point 
+            # TODO:inside_spotsをつくる
+            if not point in outside_spots:  # 内側の点だけ
                 if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
                     min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
-                    (
+                    if debug:
                         print(f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}")
-                        if debug
-                        else None
-                    )
+                        
                     if min2far - np.abs(cxo - x) < limb_wigth * (2 / 3):
                         not_sunspots_idx += [i]
                     else:
                         sunspot = True
                 else:  # 円のRLTBのうちTBなら
                     min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
-                    (
+                    if debug:
                         print(f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}")
-                        if debug
-                        else None
-                    )
+                        
                     if min2far - np.abs(cyo - y) < limb_wigth * (2 / 3):
                         not_sunspots_idx += [i]
                     else:
@@ -568,7 +565,6 @@ def MIN2_ignore_sunspots(
             cx, cy, r = fit_circle(
                 np.array([spots[i] for i in not_sunspots_idx], dtype=float), show
             )
-            spots=[spots[i] for i in not_sunspots_idx]
         else:
             break
         
