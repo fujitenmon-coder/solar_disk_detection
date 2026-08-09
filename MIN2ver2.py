@@ -519,8 +519,8 @@ def MIN2_ignore_sunspots(
             else:
                 inside_spots.append(point)
 
-            #inside_spotsから発見された黒点をindexで管理するため
-            safe_points=inside_spots+outside_spots
+        #inside_spotsから発見された黒点をindexで管理するため
+        safe_points=inside_spots+outside_spots
 
         cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
         if debug:
