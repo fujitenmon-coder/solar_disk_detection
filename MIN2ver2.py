@@ -15,7 +15,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.6"  #refactor range(len())からの脱却および縁の点の扱いの構造を粋に
+version = "MIN2 v2.3.7"  #refactor range(len())からの脱却および縁の点の扱いの構造を粋に
 
 def cut_and_sampling(
     img_inst: str | np.ndarray, sun_threshold: float
@@ -560,7 +560,7 @@ def MIN2_ignore_sunspots(
                 if min2far - np.abs(cyo - y) > limb_wigth * (2 / 3):
                     sunspots.append(i)
 
-        for i in sunspots:
+        for i in sorted(sunspots,reversed=T):
             all_sunspots.append(safe_points.pop(i))
 
         if sunspots:
