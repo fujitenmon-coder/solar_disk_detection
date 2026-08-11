@@ -447,7 +447,7 @@ def MIN2_ignore_sunspots(
     一度検出した近似円の外側にある点から再度円を近似し、その円の縁幅（limb_wigth*(2/3)）の範囲内にない内側の点を黒点とみなして除外します。
 
     Args:
-        readed_img (Union[np.ndarray,str]): 読み込んだ入力画像（グレースケール画像）または読み込み指示("PATH"ならimg_pathを読み込む)。
+        img_inst (Union[np.ndarray,str]): 読み込んだ入力画像（グレースケール画像）または読み込み指示("PATH"ならimg_pathを読み込む)。
         n (int): 画像格子の分割数。デフォルトは 10 です。
         light_threshold (int): 太陽の明るさの基準しきい値。デフォルトは 50 です。
         limb_wigth (int): 太陽の縁の幅の基準値。デフォルトは 24 です。
@@ -524,7 +524,7 @@ def MIN2_ignore_sunspots(
 
         cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
         if debug:
-            print(f"[INFO]:outside circle (cx,cy,r)={cx,cy,r}")
+            print(f"[INFO]:outside circle (cx,cy,r)={cxo,cyo,ro}")
             if show:
                 show_circle(
                     img_inst="GLOBAL",
