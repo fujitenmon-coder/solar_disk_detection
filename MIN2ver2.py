@@ -99,6 +99,95 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
     R = np.sqrt(cx**2 + cy**2 - C)
     return [cx, cy, R]
 
+def retry_edge_on_spot(spot:list[int],cir_stat:tuple(tuple(float),float),img_inst:nd.array | str = "GLOBAL"):
+    """黒点を誤検知したときにretryする関数"""
+
+    spot_x,spot_y,grad_val,direc=spot
+    (cx,cy),r=cir_stat
+
+    if isinstance(img_inst, str):
+        if img_inst == "GLOBAL":
+            img = globals().get("img")
+            if img is None:
+                raise ValueError(
+                    "画像が指定されていません。imgを渡すか、グローバル変数imgを設定してください。"
+                )
+        else:
+            raise ValueError(f"Unknown instructions = {img_inst}")
+    else:
+        img = img_inst
+    if img is None:
+        raise ValueError("img is None")
+    img = np.asarray(img)
+    if img.ndim != 2:
+        raise ValueError("This function expects a 2D grayscale image")
+
+
+    if direc == "x":
+        perpendic = abs(spot_y-cy)
+        range_x = (spot_x,spot_x+1)
+    elif direc == "y":
+        perpendic = abs(spot_x-cx)
+        range_y = (spot_y,spot_y+1)
+    else:
+        raise ValueError("Unknown direction in spot stat (expected 'x' or 'y')")
+
+
+    inside = r * r - perpendic * perpendic
+    variation = sqrt(max(inside, 0.0))
+
+    if direc == "x":
+        # we will extract a vertical 1D line (vary y) at column spot_x (or limited x-range)
+        if grad_val < 0:
+            y0 = int(max(0, cy + variation))
+            y1 = img.shape[0]
+        else:
+            y0 = 0
+            y1 = int(min(img.shape[0], cy - variation))
+        x0 = int(np.clip(spot_x, 0, img.shape[1] - 1))
+        x1 = x0 + 1
+        if y1 <= y0:
+            return None
+        line2d = img[y0:y1, x0:x1]
+        line = line2d[:, 0].astype(float)
+    else:  # direc == "y"
+        # extract a horizontal 1D line (vary x) at row spot_y
+        if grad_val < 0:
+            x0 = int(max(0, cx + variation))
+            x1 = img.shape[1]
+        else:
+            x0 = 0
+            x1 = int(min(img.shape[1], cx - variation))
+        y0 = int(np.clip(spot_y, 0, img.shape[0] - 1))
+        y1 = y0 + 1
+        if x1 <= x0:
+            return None
+        line2d = img[y0:y1, x0:x1]
+        line = line2d[0, :].astype(float)
+
+    if line.size == 0 or np.max(line) <= sun_threshold:
+        return None
+
+    grad_t = np.diff(line)
+
+    # choose index of strongest positive or negative gradient depending on grad_val sign
+    if grad_val > 0:
+        rel_idx = int(np.argmax(grad_t))
+    else:
+        rel_idx = int(np.argmin(grad_t))
+
+    # convert relative index to image coordinates
+    if direc == "x":
+        y_idx = y0 + rel_idx
+        x_idx = x0
+        grad_at_edge = grad_t[rel_idx]
+        return [int(x_idx), int(y_idx), float(grad_at_edge), direc]
+    else:
+        x_idx = x0 + rel_idx
+        y_idx = y0
+        grad_at_edge = grad_t[rel_idx]
+        return [int(x_idx), int(y_idx), float(grad_at_edge), direc]
+
 
 def show_circle(
     img_inst: str | np.ndarray,
