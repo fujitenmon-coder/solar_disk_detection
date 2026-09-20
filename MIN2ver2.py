@@ -15,7 +15,7 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.9"  # retry_edge_on_spotの追加と実装
+version = "MIN2 v2.3.9.1"  # typoの修正とformat
 
 
 def cut_and_sampling(
@@ -34,7 +34,7 @@ def cut_and_sampling(
         if img_inst == "GLOBAL":
             img = globals().get("img")
             if img is None:
-                raise ValueError(s
+                raise ValueError(
                     "画像が指定されていません。imgを渡すか、グローバル変数imgを設定してください。"
                 )
         else:
@@ -99,11 +99,17 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
     R = np.sqrt(cx**2 + cy**2 - C)
     return [cx, cy, R]
 
-def retry_edge_on_spot(spot: list[int | float | str], cir_stat: tuple[tuple[float, float], float], img_inst: np.ndarray | str = "GLOBAL",sun_threshold:int =  50) -> None | list:
+
+def retry_edge_on_spot(
+    spot: list[int | float | str],
+    cir_stat: tuple[tuple[float, float], float],
+    img_inst: np.ndarray | str = "GLOBAL",
+    sun_threshold: int = 50,
+) -> None | list:
     """黒点を誤検知したときにretryする関数"""
 
-    spot_x,spot_y,grad_val,direc=spot
-    (cx,cy),r=cir_stat
+    spot_x, spot_y, grad_val, direc = spot
+    (cx, cy), r = cir_stat
 
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
@@ -122,11 +128,10 @@ def retry_edge_on_spot(spot: list[int | float | str], cir_stat: tuple[tuple[floa
     if img.ndim != 2:
         raise ValueError("This function expects a 2D grayscale image")
 
-
     if direc == "x":
-        perpendic = abs(spot_y-cy)
+        perpendic = abs(spot_y - cy)
     elif direc == "y":
-        perpendic = abs(spot_x-cx)
+        perpendic = abs(spot_x - cx)
     else:
         raise ValueError("Unknown direction in spot stat (expected 'x' or 'y')")
 
@@ -636,7 +641,7 @@ def MIN2_ignore_sunspots(
             )
 
         for i, point in enumerate(inside_spots):
-            x, y = point[0],point[1]
+            x, y = point[0], point[1]
             if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
                 min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
                 if debug:
@@ -646,7 +651,12 @@ def MIN2_ignore_sunspots(
 
                 if min2far - np.abs(cxo - x) > limb_wigth * (2 / 3):
                     sunspots.append(i)
-                    retry = retry_edge_on_spot(spot=point,cir_stat=((cx,cy),r),img_inst="GLOBAL",sun_threshold=light_threshold)
+                    retry = retry_edge_on_spot(
+                        spot=point,
+                        cir_stat=((cx, cy), r),
+                        img_inst="GLOBAL",
+                        sun_threshold=light_threshold,
+                    )
                     if retry is not None:
                         safe_points.append(retry)
 
@@ -659,9 +669,14 @@ def MIN2_ignore_sunspots(
 
                 if min2far - np.abs(cyo - y) > limb_wigth * (2 / 3):
                     sunspots.append(i)
-                    retry = retry_edge_on_spot(spot=point,cir_stat=((cx,cy),r),img_inst="GLOBAL",sun_threshold=light_threshold)
+                    retry = retry_edge_on_spot(
+                        spot=point,
+                        cir_stat=((cx, cy), r),
+                        img_inst="GLOBAL",
+                        sun_threshold=light_threshold,
+                    )
                     if retry is not None:
-                        safe_points.append(retry)point,cir_stat=((cx,cy),r),img_inst="GLOBAL",sun_threshold=light_threshold))
+                        safe_points.append(retry)
 
         for i in sorted(sunspots, reverse=True):
             all_sunspots.append(safe_points.pop(i))
