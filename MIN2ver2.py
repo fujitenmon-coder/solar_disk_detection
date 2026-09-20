@@ -87,8 +87,8 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
             show_circle(img_inst="GLOBAL", spots=spots, cir_stat=False)
         raise ValueError("点不足")
     x, y = (
-        np.array([s[0] for s in spots], dtype=float),
-        np.array([s[1] for s in spots], dtype=float),
+        np.array([s[0] for s in spots], dtype=int),
+        np.array([s[1] for s in spots], dtype=int),
     )
     mat_A = np.c_[x, y, np.ones(len(x))]
     vec_B = -(x**2 + y**2)
@@ -314,8 +314,8 @@ def show_circle(
         ax_main.add_patch(circle)
 
     x, y = (
-        np.array([s[0] for s in spots], dtype=float),
-        np.array([s[1] for s in spots], dtype=float),
+        np.array([s[0] for s in spots], dtype=int),
+        np.array([s[1] for s in spots], dtype=int),
     )
     ax_main.scatter(x, y, color="red", label="Edges", s=50)
 
@@ -486,8 +486,8 @@ def show_circle_simple(
         ax.add_patch(circle)  ###
     if len(spots) > 0:
         x, y = (
-            np.array([s[0] for s in spots], dtype=float),
-            np.array([s[1] for s in spots], dtype=float),
+            np.array([s[0] for s in spots], dtype=int),
+            np.array([s[1] for s in spots], dtype=int),
         )
         ax.scatter(
             x,
@@ -720,7 +720,7 @@ if __name__ == "__main__":
                 print(f"[ERROR]:Failed to read image: {file}")
                 break
             (cx, cy), r = MIN2_ignore_sunspots(
-                img, show=False, debug=False, limb_wigth=60
+                img, show=True, debug=True, limb_wigth=60
             )
             result = cx, cy, r
             print((float(result[0]), float(result[1]), float(result[2])))
