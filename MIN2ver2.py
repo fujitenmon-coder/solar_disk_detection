@@ -704,8 +704,11 @@ def MIN2_ignore_sunspots(
 if __name__ == "__main__":
     from tkinter.filedialog import askdirectory, askopenfilename
 
-    if input("[OPERATE]:onefile(0)/dir(1)?:") == "1":
-        dirpath = askdirectory(title="フォルダを選択してください")
+    mode="1"#input("[OPERATE]:onefile(0)/dir(1)?:")
+    
+    if mode == "1":
+        #dirpath = askdirectory(title="フォルダを選択してください")
+        dirpath = r"J:\Observe-Data\2026-07-10\2026-07-10vid\2026-07-10tiff\2026-07-10-0345_0-CapObj"
         print(f"[INFO]:dir={dirpath}")
         import glob
         import os
