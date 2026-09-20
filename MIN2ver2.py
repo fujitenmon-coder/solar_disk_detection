@@ -1,6 +1,6 @@
 import os
 import pathlib
-from pprint import pformat
+from pprint import pformat, pprint
 
 import cv2
 import matplotlib.pyplot as plt
@@ -60,11 +60,11 @@ def cut_and_sampling(
             max_idx = int(np.argmax(grad_t))  # 最大値のインデックス
             min_idx = int(np.argmin(grad_t))  # 最小値のインデックス
             if line_xy == "x_line":
-                spots.append([max_idx, place, grad_t[max_idx], "x"])
-                spots.append([min_idx, place, grad_t[min_idx], "x"])
+                spots.append([max_idx, place, grad_t[max_idx], 0])
+                spots.append([min_idx, place, grad_t[min_idx],0])
             elif line_xy == "y_line":
-                spots.append([place, max_idx, grad_t[max_idx], "y"])
-                spots.append([place, min_idx, grad_t[min_idx], "y"])
+                spots.append([place, max_idx, grad_t[max_idx], 1])
+                spots.append([place, min_idx, grad_t[min_idx], 1])
     return spots  # 縁の点の座標を返す
 
 
@@ -87,8 +87,8 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
             show_circle(img_inst="GLOBAL", spots=spots, cir_stat=False)
         raise ValueError("点不足")
     x, y = (
-        np.array([s[0] for s in spots], dtype=int),
-        np.array([s[1] for s in spots], dtype=int),
+        np.array([s[0] for s in spots], dtype=float),
+        np.array([s[1] for s in spots], dtype=float),
     )
     mat_A = np.c_[x, y, np.ones(len(x))]
     vec_B = -(x**2 + y**2)
@@ -101,7 +101,7 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
 
 
 def retry_edge_on_spot(
-    spot: list[int | float | str],
+    spot: list[float],
     cir_stat: tuple[tuple[float, float], float],
     img_inst: np.ndarray | str = "GLOBAL",
     sun_threshold: int = 50,
@@ -128,9 +128,9 @@ def retry_edge_on_spot(
     if img.ndim != 2:
         raise ValueError("This function expects a 2D grayscale image")
 
-    if direc == "x":
+    if direc == 0:
         perpendic = abs(spot_y - cy)
-    elif direc == "y":
+    elif direc ==1:
         perpendic = abs(spot_x - cx)
     else:
         raise ValueError("Unknown direction in spot stat (expected 'x' or 'y')")
@@ -138,7 +138,7 @@ def retry_edge_on_spot(
     inside = r * r - perpendic * perpendic
     variation = np.sqrt(max(inside, 0.0))
 
-    if direc == "x":
+    if direc == 0:
         if grad_val < 0:
             x0 = int(max(0, cx + variation))
             x1 = img.shape[1]
@@ -177,7 +177,7 @@ def retry_edge_on_spot(
         rel_idx = int(np.argmin(grad_t))
 
     # convert relative index to image coordinates
-    if direc == "x":
+    if direc == 0:
         y_idx = y0 + rel_idx
         x_idx = x0
         grad_at_edge = grad_t[rel_idx]
@@ -223,7 +223,6 @@ def show_circle(
             iteration_count=iteration_count,
             is_last=is_last,
         )
-        return None
 
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
@@ -314,8 +313,8 @@ def show_circle(
         ax_main.add_patch(circle)
 
     x, y = (
-        np.array([s[0] for s in spots], dtype=int),
-        np.array([s[1] for s in spots], dtype=int),
+        np.array([s[0] for s in spots], dtype=float),
+        np.array([s[1] for s in spots], dtype=float),
     )
     ax_main.scatter(x, y, color="red", label="Edges", s=50)
 
@@ -366,6 +365,8 @@ def show_circle(
 
     line_data = np.linspace(0, 0, window_size * 2)
     for idx, (xi, yi) in enumerate(zip(x, y)):
+        xi=int(xi)
+        yi=int(yi)
         # 横線(x_line)上の点か、縦線(y_line)上の点かを判定
         is_x_line = any(yi == height * i // divnum for i in range(1, divnum))
 
@@ -588,6 +589,8 @@ def MIN2_ignore_sunspots(
     spots = cut_and_sampling(
         img_inst="GLOBAL", sun_threshold=light_threshold
     )  # spots=[[x1,y1,grad val],[x2,y2,grad val],...]の形式で、縁の点の座標を格納したlist
+    if debug:
+        pprint(spots)
     cx, cy, r = fit_circle(spots, show)  # 一回目の円情報
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
@@ -610,8 +613,8 @@ def MIN2_ignore_sunspots(
         outside_spots = []
         inside_spots = []
         for point in safe_points:
-            x, y = point
-            if int(((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r:
+            x, y,_,_ = point
+            if (((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r: #intに丸めるとoutsideが極端に少なくなる。
                 outside_spots.append(point)
             else:
                 inside_spots.append(point)
@@ -707,8 +710,8 @@ if __name__ == "__main__":
     mode="1"#input("[OPERATE]:onefile(0)/dir(1)?:")
     
     if mode == "1":
-        #dirpath = askdirectory(title="フォルダを選択してください")
-        dirpath = r"J:\Observe-Data\2026-07-10\2026-07-10vid\2026-07-10tiff\2026-07-10-0345_0-CapObj"
+        dirpath = askdirectory(title="フォルダを選択してください")
+        # dirpath = r"J:\Observe-Data\2026-07-10\2026-07-10vid\2026-07-10tiff\2026-07-10-0345_0-CapObj"
         print(f"[INFO]:dir={dirpath}")
         import glob
         import os
