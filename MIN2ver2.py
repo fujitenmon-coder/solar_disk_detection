@@ -87,8 +87,8 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
             show_circle(img_inst="GLOBAL", spots=spots, cir_stat=False)
         raise ValueError("点不足")
     x, y = (
-        np.array([s[0] for s in spots], dtype=int),
-        np.array([s[1] for s in spots], dtype=int),
+        np.array([s[0] for s in spots], dtype=float),
+        np.array([s[1] for s in spots], dtype=float),
     )
     mat_A = np.c_[x, y, np.ones(len(x))]
     vec_B = -(x**2 + y**2)
@@ -313,8 +313,8 @@ def show_circle(
         ax_main.add_patch(circle)
 
     x, y = (
-        np.array([s[0] for s in spots], dtype=int),
-        np.array([s[1] for s in spots], dtype=int),
+        np.array([s[0] for s in spots], dtype=float),
+        np.array([s[1] for s in spots], dtype=float),
     )
     ax_main.scatter(x, y, color="red", label="Edges", s=50)
 
@@ -365,6 +365,8 @@ def show_circle(
 
     line_data = np.linspace(0, 0, window_size * 2)
     for idx, (xi, yi) in enumerate(zip(x, y)):
+        xi=int(xi)
+        yi=int(yi)
         # 横線(x_line)上の点か、縦線(y_line)上の点かを判定
         is_x_line = any(yi == height * i // divnum for i in range(1, divnum))
 
@@ -612,7 +614,7 @@ def MIN2_ignore_sunspots(
         inside_spots = []
         for point in safe_points:
             x, y,_,_ = point
-            if int(((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r:
+            if (((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r: #intに丸めるとoutsideが極端に少なくなる。
                 outside_spots.append(point)
             else:
                 inside_spots.append(point)
