@@ -60,11 +60,11 @@ def cut_and_sampling(
             max_idx = int(np.argmax(grad_t))  # 最大値のインデックス
             min_idx = int(np.argmin(grad_t))  # 最小値のインデックス
             if line_xy == "x_line":
-                spots.append([max_idx, place, grad_t[max_idx], "x"])
-                spots.append([min_idx, place, grad_t[min_idx], "x"])
+                spots.append([max_idx, place, grad_t[max_idx], 0])
+                spots.append([min_idx, place, grad_t[min_idx],0])
             elif line_xy == "y_line":
-                spots.append([place, max_idx, grad_t[max_idx], "y"])
-                spots.append([place, min_idx, grad_t[min_idx], "y"])
+                spots.append([place, max_idx, grad_t[max_idx], 1])
+                spots.append([place, min_idx, grad_t[min_idx], 1])
     return spots  # 縁の点の座標を返す
 
 
@@ -101,7 +101,7 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
 
 
 def retry_edge_on_spot(
-    spot: list[int | float | str],
+    spot: list[float],
     cir_stat: tuple[tuple[float, float], float],
     img_inst: np.ndarray | str = "GLOBAL",
     sun_threshold: int = 50,
@@ -128,9 +128,9 @@ def retry_edge_on_spot(
     if img.ndim != 2:
         raise ValueError("This function expects a 2D grayscale image")
 
-    if direc == "x":
+    if direc == 0:
         perpendic = abs(spot_y - cy)
-    elif direc == "y":
+    elif direc ==1:
         perpendic = abs(spot_x - cx)
     else:
         raise ValueError("Unknown direction in spot stat (expected 'x' or 'y')")
@@ -138,7 +138,7 @@ def retry_edge_on_spot(
     inside = r * r - perpendic * perpendic
     variation = np.sqrt(max(inside, 0.0))
 
-    if direc == "x":
+    if direc == 0:
         if grad_val < 0:
             x0 = int(max(0, cx + variation))
             x1 = img.shape[1]
@@ -177,7 +177,7 @@ def retry_edge_on_spot(
         rel_idx = int(np.argmin(grad_t))
 
     # convert relative index to image coordinates
-    if direc == "x":
+    if direc == 0:
         y_idx = y0 + rel_idx
         x_idx = x0
         grad_at_edge = grad_t[rel_idx]
@@ -223,7 +223,6 @@ def show_circle(
             iteration_count=iteration_count,
             is_last=is_last,
         )
-        return None
 
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
@@ -612,7 +611,7 @@ def MIN2_ignore_sunspots(
         outside_spots = []
         inside_spots = []
         for point in safe_points:
-            x, y = point
+            x, y,_,_ = point
             if int(((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r:
                 outside_spots.append(point)
             else:
@@ -709,8 +708,8 @@ if __name__ == "__main__":
     mode="1"#input("[OPERATE]:onefile(0)/dir(1)?:")
     
     if mode == "1":
-        #dirpath = askdirectory(title="フォルダを選択してください")
-        dirpath = r"J:\Observe-Data\2026-07-10\2026-07-10vid\2026-07-10tiff\2026-07-10-0345_0-CapObj"
+        dirpath = askdirectory(title="フォルダを選択してください")
+        # dirpath = r"J:\Observe-Data\2026-07-10\2026-07-10vid\2026-07-10tiff\2026-07-10-0345_0-CapObj"
         print(f"[INFO]:dir={dirpath}")
         import glob
         import os
