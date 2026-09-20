@@ -234,7 +234,7 @@ def show_circle(
 
         elif img_inst == "PATH":
             if img_path != None:
-                img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
+                img = cv2.imread(str(img_path),  cv2.IMREAD_GRAYSCALE | cv2.IMREAD_ANYDEPTH)
                 if img is None:
                     raise ValueError(
                         "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
@@ -455,7 +455,7 @@ def show_circle_simple(
 
         elif img_inst == "PATH":
             if img_path != None:
-                img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
+                img = cv2.imread(str(img_path),  cv2.IMREAD_GRAYSCALE | cv2.IMREAD_ANYDEPTH)
                 if img is None:
                     raise ValueError(
                         "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、または画像のパスを引数に追加してください。"
@@ -565,13 +565,16 @@ def MIN2_ignore_sunspots(
 
     if isinstance(img_inst, str):
         if img_inst == "PATH":
-            readed_img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
+            readed_img = cv2.imread(str(img_path),  cv2.IMREAD_GRAYSCALE | cv2.IMREAD_ANYDEPTH)
             if readed_img is None:
                 raise ValueError("画像の読み込みに失敗しました。")
         else:
             raise ValueError(f"Unknown instructions = {img_inst}")
     else:
-        readed_img = img_inst
+        if img_inst.ndim == 3:
+            raise ValueError("grayscale画像を読み込ませてください。")
+        else:
+            readed_img = img_inst
 
     # ===基本的な変数をglobalで宣言===
     global divnum  # 分割数、引数ではnとして受け取っている。
@@ -721,12 +724,12 @@ if __name__ == "__main__":
         for p in patterns:
             files.extend(glob.glob(os.path.join(dirpath, p)))
         for file in files:
-            img = cv2.imread(file, cv2.IMREAD_UNCHANGED)
+            img = cv2.imread(file,  cv2.IMREAD_GRAYSCALE | cv2.IMREAD_ANYDEPTH)
             if img is None:
                 print(f"[ERROR]:Failed to read image: {file}")
                 break
             (cx, cy), r = MIN2_ignore_sunspots(
-                img, show=True, debug=True, limb_wigth=60
+                img, show=False, debug=True, limb_wigth=60
             )
             result = cx, cy, r
             print((float(result[0]), float(result[1]), float(result[2])))
@@ -739,7 +742,7 @@ if __name__ == "__main__":
         from time import time
 
         start = time()
-        img = cv2.imread(picpath, cv2.IMREAD_UNCHANGED)
+        img = cv2.imread(picpath, cv2.IMREAD_GRAYSCALE | cv2.IMREAD_ANYDEPTH)
         if not img is None:
             print(
                 f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath, show_simple=True)}"
