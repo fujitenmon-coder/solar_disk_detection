@@ -1,6 +1,6 @@
 import os
 import pathlib
-from pprint import pformat
+from pprint import pformat, pprint
 
 import cv2
 import matplotlib.pyplot as plt
@@ -588,6 +588,8 @@ def MIN2_ignore_sunspots(
     spots = cut_and_sampling(
         img_inst="GLOBAL", sun_threshold=light_threshold
     )  # spots=[[x1,y1,grad val],[x2,y2,grad val],...]の形式で、縁の点の座標を格納したlist
+    if debug:
+        pprint(spots)
     cx, cy, r = fit_circle(spots, show)  # 一回目の円情報
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
