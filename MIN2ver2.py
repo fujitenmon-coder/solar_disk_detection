@@ -632,7 +632,7 @@ def MIN2_ignore_sunspots(
                     cir_stat=(cxo, cyo, ro),
                     img_path=img_path,
                     iteration_count=iter_cycles,
-                    fig_info={"circle": "only points only"},
+                    fig_info={"circle": "only outside points "},
                     simple=show_simple,
                 )
 
@@ -660,6 +660,8 @@ def MIN2_ignore_sunspots(
                         img_inst="GLOBAL",
                         sun_threshold=light_threshold,
                     )
+                    if debug:
+                        print(f"    黒点を検出しました(LR)。再検討します。\n    {point}\n   → {retry}")
                     if retry is not None:
                         safe_points.append(retry)
 
@@ -678,6 +680,8 @@ def MIN2_ignore_sunspots(
                         img_inst="GLOBAL",
                         sun_threshold=light_threshold,
                     )
+                    if debug:
+                        print(f"    黒点を検出しました(TB)。再検討します。\n    {point}\n    → {retry}")
                     if retry is not None:
                         safe_points.append(retry)
 
@@ -707,7 +711,7 @@ def MIN2_ignore_sunspots(
 if __name__ == "__main__":
     from tkinter.filedialog import askdirectory, askopenfilename
 
-    mode="1"#input("[OPERATE]:onefile(0)/dir(1)?:")
+    mode="0"#input("[OPERATE]:onefile(0)/dir(1)?:")
     
     if mode == "1":
         dirpath = askdirectory(title="フォルダを選択してください")
@@ -742,7 +746,7 @@ if __name__ == "__main__":
         img = cv2.imread(picpath, cv2.IMREAD_UNCHANGED)
         if not img is None:
             print(
-                f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath, show_simple=True)}"
+                f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath, show_simple=False)}"
             )
         else:
             print(f"[ERROR]:reading img failed path={picpath}")
