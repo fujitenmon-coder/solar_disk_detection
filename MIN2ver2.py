@@ -1,6 +1,6 @@
 import os
 import pathlib
-from pprint import pformat
+from pprint import pformat, pprint
 
 import cv2
 import matplotlib.pyplot as plt
@@ -15,7 +15,8 @@ main: MIN2_ignore_sunspots()
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円からlimbwigth*(3/2)の
 範囲にないもんは黒点とみなします。
 """
-version = "MIN2 v2.3.8"  #fix:popによるindexの変化を阻止
+version = "MIN2 v2.3.9.1"  # typoの修正とformat
+
 
 def cut_and_sampling(
     img_inst: str | np.ndarray, sun_threshold: float
@@ -27,7 +28,7 @@ def cut_and_sampling(
         sun_threshold (Union[int, float]): 太陽像とみなす明るさのしきい値。これ以下の直線は処理をスキップする。
 
     Returns:
-        List[List[int]]: サンプリングされた縁の座標 [x, y] のリスト。
+        List[List[int]]: サンプリングされた縁の座標,微分の値,"x"or"y"切り出し方向 [x, y,grad_val,"x"] のリスト。
     """
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
@@ -59,11 +60,11 @@ def cut_and_sampling(
             max_idx = int(np.argmax(grad_t))  # 最大値のインデックス
             min_idx = int(np.argmin(grad_t))  # 最小値のインデックス
             if line_xy == "x_line":
-                spots.append([max_idx, place])
-                spots.append([min_idx, place])
+                spots.append([max_idx, place, grad_t[max_idx], 0])
+                spots.append([min_idx, place, grad_t[min_idx],0])
             elif line_xy == "y_line":
-                spots.append([place, max_idx])
-                spots.append([place, min_idx])
+                spots.append([place, max_idx, grad_t[max_idx], 1])
+                spots.append([place, min_idx, grad_t[min_idx], 1])
     return spots  # 縁の点の座標を返す
 
 
@@ -85,8 +86,9 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
         if show:
             show_circle(img_inst="GLOBAL", spots=spots, cir_stat=False)
         raise ValueError("点不足")
-    x, y = np.array([s[0] for s in spots], dtype=float), np.array(
-        [s[1] for s in spots], dtype=float
+    x, y = (
+        np.array([s[0] for s in spots], dtype=float),
+        np.array([s[1] for s in spots], dtype=float),
     )
     mat_A = np.c_[x, y, np.ones(len(x))]
     vec_B = -(x**2 + y**2)
@@ -98,6 +100,95 @@ def fit_circle(spots: list[list[int]] | np.ndarray, show: bool = False) -> list[
     return [cx, cy, R]
 
 
+def retry_edge_on_spot(
+    spot: list[float],
+    cir_stat: tuple[tuple[float, float], float],
+    img_inst: np.ndarray | str = "GLOBAL",
+    sun_threshold: int = 50,
+) -> None | list:
+    """黒点を誤検知したときにretryする関数"""
+
+    spot_x, spot_y, grad_val, direc = spot
+    (cx, cy), r = cir_stat
+
+    if isinstance(img_inst, str):
+        if img_inst == "GLOBAL":
+            img = globals().get("img")
+            if img is None:
+                raise ValueError(
+                    "画像が指定されていません。imgを渡すか、グローバル変数imgを設定してください。"
+                )
+        else:
+            raise ValueError(f"Unknown instructions = {img_inst}")
+    else:
+        img = img_inst
+    if img is None:
+        raise ValueError("img is None")
+    img = np.asarray(img)
+    if img.ndim != 2:
+        raise ValueError("This function expects a 2D grayscale image")
+
+    if direc == 0:
+        perpendic = abs(spot_y - cy)
+    elif direc ==1:
+        perpendic = abs(spot_x - cx)
+    else:
+        raise ValueError("Unknown direction in spot stat (expected 'x' or 'y')")
+
+    inside = r * r - perpendic * perpendic
+    variation = np.sqrt(max(inside, 0.0))
+
+    if direc == 0:
+        if grad_val < 0:
+            x0 = int(max(0, cx + variation))
+            x1 = img.shape[1]
+        else:
+            x0 = 0
+            x1 = int(min(img.shape[1], cx - variation))
+        y0 = int(np.clip(spot_y, 0, img.shape[0] - 1))
+        y1 = y0 + 1
+        if x1 <= x0:
+            return None
+        line2d = img[y0:y1, x0:x1]
+        line = line2d[0, :].astype(float)
+    else:
+        if grad_val < 0:
+            y0 = int(max(0, cy + variation))
+            y1 = img.shape[0]
+        else:
+            y0 = 0
+            y1 = int(min(img.shape[0], cy - variation))
+        x0 = int(np.clip(spot_x, 0, img.shape[1] - 1))
+        x1 = x0 + 1
+        if y1 <= y0:
+            return None
+        line2d = img[y0:y1, x0:x1]
+        line = line2d[:, 0].astype(float)
+
+    if line.size == 0 or np.max(line) <= sun_threshold:
+        return None
+
+    grad_t = np.diff(line)
+
+    # choose index of strongest positive or negative gradient depending on grad_val sign
+    if grad_val > 0:
+        rel_idx = int(np.argmax(grad_t))
+    else:
+        rel_idx = int(np.argmin(grad_t))
+
+    # convert relative index to image coordinates
+    if direc == 0:
+        y_idx = y0 + rel_idx
+        x_idx = x0
+        grad_at_edge = grad_t[rel_idx]
+        return [int(x_idx), int(y_idx), float(grad_at_edge), direc]
+    else:
+        x_idx = x0 + rel_idx
+        y_idx = y0
+        grad_at_edge = grad_t[rel_idx]
+        return [int(x_idx), int(y_idx), float(grad_at_edge), direc]
+
+
 def show_circle(
     img_inst: str | np.ndarray,
     spots: list[list[int]] | np.ndarray | None = None,
@@ -106,7 +197,7 @@ def show_circle(
     fig_info: dict[str, str] | None = None,
     iteration_count: int | str = 1,
     is_last: bool = False,
-    simple: bool = False
+    simple: bool = False,
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示します。
 
@@ -125,14 +216,13 @@ def show_circle(
 
     if simple:
         show_circle_simple(
-                    img_inst=img_inst,
-                    spots=spots,
-                    cir_stat=cir_stat,
-                    img_path=img_path,
-                    iteration_count=iteration_count,
-                    is_last=is_last
-                )
-        return None
+            img_inst=img_inst,
+            spots=spots,
+            cir_stat=cir_stat,
+            img_path=img_path,
+            iteration_count=iteration_count,
+            is_last=is_last,
+        )
 
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
@@ -222,7 +312,10 @@ def show_circle(
         circle = Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
         ax_main.add_patch(circle)
 
-    x, y = zip(*spots)
+    x, y = (
+        np.array([s[0] for s in spots], dtype=float),
+        np.array([s[1] for s in spots], dtype=float),
+    )
     ax_main.scatter(x, y, color="red", label="Edges", s=50)
 
     # 座標ラベルと対応関係のための番号を表示
@@ -231,7 +324,7 @@ def show_circle(
         ax_main.text(
             xi,
             yi,
-            f"#{idx+1}",
+            f"#{idx + 1}",
             color="lime",
             fontsize=12,
             fontweight="bold",
@@ -272,6 +365,8 @@ def show_circle(
 
     line_data = np.linspace(0, 0, window_size * 2)
     for idx, (xi, yi) in enumerate(zip(x, y)):
+        xi=int(xi)
+        yi=int(yi)
         # 横線(x_line)上の点か、縦線(y_line)上の点かを判定
         is_x_line = any(yi == height * i // divnum for i in range(1, divnum))
 
@@ -302,7 +397,7 @@ def show_circle(
         ax_sub = fig.add_subplot(gs[r_idx, 3 + c_idx])
 
         # タイトルに画像と同じ番号を表示して紐付ける
-        ax_sub.set_title(f"#{idx+1}", fontsize=10, color="black", fontweight="bold")
+        ax_sub.set_title(f"#{idx + 1}", fontsize=10, color="black", fontweight="bold")
 
         # 【左軸】：明るさ（オレンジ色の実線）
         color_bright = "tab:orange"
@@ -391,7 +486,10 @@ def show_circle_simple(
         )  # 結果の円を描画
         ax.add_patch(circle)  ###
     if len(spots) > 0:
-        x, y = zip(*spots)
+        x, y = (
+            np.array([s[0] for s in spots], dtype=int),
+            np.array([s[1] for s in spots], dtype=int),
+        )
         ax.scatter(
             x,
             y,
@@ -432,14 +530,14 @@ def show_circle_simple(
 
 
 def MIN2_ignore_sunspots(
-    img_inst: np.ndarray|str="PATH",
+    img_inst: np.ndarray | str = "PATH",
     n: int = 10,
     light_threshold: int = 50,
     limb_wigth: int = 24,
     iter_cycles: int = 2,
     show: bool = False,
     debug: bool = False,
-    img_path: pathlib.Path|str = "",
+    img_path: pathlib.Path | str = "",
     show_simple=False,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
@@ -460,21 +558,21 @@ def MIN2_ignore_sunspots(
     Returns:
         tuple[tuple[float, float], float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
     """
-    if isinstance(img_path,str):
-        img_path=pathlib.Path(img_path)
+    if isinstance(img_path, str):
+        img_path = pathlib.Path(img_path)
         if not img_path.exists():
             raise ValueError("そのパスの画像は存在しません。")
-    
-    if isinstance(img_inst,str):
+
+    if isinstance(img_inst, str):
         if img_inst == "PATH":
-            readed_img=cv2.imread(str(img_path),cv2.IMREAD_UNCHANGED)
+            readed_img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
             if readed_img is None:
                 raise ValueError("画像の読み込みに失敗しました。")
         else:
             raise ValueError(f"Unknown instructions = {img_inst}")
     else:
-        readed_img=img_inst
-            
+        readed_img = img_inst
+
     # ===基本的な変数をglobalで宣言===
     global divnum  # 分割数、引数ではnとして受け取っている。
     divnum = n
@@ -490,10 +588,12 @@ def MIN2_ignore_sunspots(
     # 円の情報[cx, cy, R]
     spots = cut_and_sampling(
         img_inst="GLOBAL", sun_threshold=light_threshold
-    )  # spots=[[x1,y1],[x2,y2],...]の形式で、縁の点の座標を格納したlist
+    )  # spots=[[x1,y1,grad val],[x2,y2,grad val],...]の形式で、縁の点の座標を格納したlist
+    if debug:
+        pprint(spots)
     cx, cy, r = fit_circle(spots, show)  # 一回目の円情報
     if debug:
-        print(f"[INFO]:trial circle (cx,cy,r)={cx,cy,r}")
+        print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
         if show:
             show_circle(
                 img_inst="GLOBAL",
@@ -502,29 +602,29 @@ def MIN2_ignore_sunspots(
                 img_path=img_path,
                 iteration_count=1,
                 fig_info={"circle": "first trial"},
-                simple=show_simple
+                simple=show_simple,
             )
 
-    all_sunspots=[]
-    safe_points=spots
-    for iter in range(iter_cycles+2):
+    all_sunspots = []
+    safe_points = spots
+    for iter in range(iter_cycles + 2):
         if debug:
             print(f"iter: {iter}")
         outside_spots = []
         inside_spots = []
         for point in safe_points:
-            x,y=point
-            if int(((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r:
+            x, y,_,_ = point
+            if (((x - cx) ** 2 + (y - cy) ** 2) ** (1 / 2)) > r: #intに丸めるとoutsideが極端に少なくなる。
                 outside_spots.append(point)
             else:
                 inside_spots.append(point)
 
-        #inside_spotsから発見された黒点をindexで管理するため
-        safe_points=inside_spots+outside_spots
+        # inside_spotsから発見された黒点をindexで管理するため
+        safe_points = inside_spots + outside_spots
 
         cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show)
         if debug:
-            print(f"[INFO]:outside circle (cx,cy,r)={cxo,cyo,ro}")
+            print(f"[INFO]:outside circle (cx,cy,r)={cxo, cyo, ro}")
             if show:
                 show_circle(
                     img_inst="GLOBAL",
@@ -532,46 +632,69 @@ def MIN2_ignore_sunspots(
                     cir_stat=(cxo, cyo, ro),
                     img_path=img_path,
                     iteration_count=iter_cycles,
-                    fig_info={"circle": "only points only"},
-                    simple=show_simple
+                    fig_info={"circle": "only outside points "},
+                    simple=show_simple,
                 )
 
         sunspots = []
 
         if debug:
-            print(f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
+            print(
+                f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}"
+            )
 
-        for i,point in enumerate(inside_spots):
-            x,y = point 
-
+        for i, point in enumerate(inside_spots):
+            x, y = point[0], point[1]
             if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
                 min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
                 if debug:
-                    print(f"    {i} x,y:{x,y} min2far:{min2far},y-cyo:{np.abs(cyo-y)}")
-                    
+                    print(
+                        f"    {i} x,y:{x, y} min2far:{min2far},y-cyo:{np.abs(cyo - y)}"
+                    )
+
                 if min2far - np.abs(cxo - x) > limb_wigth * (2 / 3):
                     sunspots.append(i)
+                    retry = retry_edge_on_spot(
+                        spot=point,
+                        cir_stat=((cx, cy), r),
+                        img_inst="GLOBAL",
+                        sun_threshold=light_threshold,
+                    )
+                    if debug:
+                        print(f"    黒点を検出しました(LR)。再検討します。\n    {point}\n   → {retry}")
+                    if retry is not None:
+                        safe_points.append(retry)
 
             else:  # 円のRLTBのうちTBなら
                 min2far = np.sqrt(ro**2 - (x - cxo) ** 2)
                 if debug:
-                    print(f"    {i} x,y:{x,y} min2far:{min2far},x-cxo:{np.abs(cxo-x)}")
-                    
+                    print(
+                        f"    {i} x,y:{x, y} min2far:{min2far},x-cxo:{np.abs(cxo - x)}"
+                    )
+
                 if min2far - np.abs(cyo - y) > limb_wigth * (2 / 3):
                     sunspots.append(i)
+                    retry = retry_edge_on_spot(
+                        spot=point,
+                        cir_stat=((cx, cy), r),
+                        img_inst="GLOBAL",
+                        sun_threshold=light_threshold,
+                    )
+                    if debug:
+                        print(f"    黒点を検出しました(TB)。再検討します。\n    {point}\n    → {retry}")
+                    if retry is not None:
+                        safe_points.append(retry)
 
         for i in sorted(sunspots, reverse=True):
             all_sunspots.append(safe_points.pop(i))
 
         if sunspots:
             # 黒点とみなされない点だけで円を作成
-            cx, cy, r = fit_circle(
-                np.array(safe_points, dtype=float), show
-            )
-            
+            cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show)
+
         else:
             break
-        
+
     if show:
         # 最終結果 (is_last=True)
         show_circle(
@@ -580,7 +703,7 @@ def MIN2_ignore_sunspots(
             cir_stat=(cx, cy, r),
             img_path=img_path,
             is_last=True,
-            simple=show_simple
+            simple=show_simple,
         )
     return (cx, cy), r
 
@@ -588,9 +711,11 @@ def MIN2_ignore_sunspots(
 if __name__ == "__main__":
     from tkinter.filedialog import askdirectory, askopenfilename
 
-    if input("[OPERATE]:onefile(0)/dir(1)?:") == "1":
-
+    mode="0"#input("[OPERATE]:onefile(0)/dir(1)?:")
+    
+    if mode == "1":
         dirpath = askdirectory(title="フォルダを選択してください")
+        # dirpath = r"J:\Observe-Data\2026-07-10\2026-07-10vid\2026-07-10tiff\2026-07-10-0345_0-CapObj"
         print(f"[INFO]:dir={dirpath}")
         import glob
         import os
@@ -604,8 +729,10 @@ if __name__ == "__main__":
             if img is None:
                 print(f"[ERROR]:Failed to read image: {file}")
                 break
-            (cx,cy),r = MIN2_ignore_sunspots(img, show=False, debug=False, limb_wigth=60)
-            result=cx,cy,r
+            (cx, cy), r = MIN2_ignore_sunspots(
+                img, show=True, debug=True, limb_wigth=60
+            )
+            result = cx, cy, r
             print((float(result[0]), float(result[1]), float(result[2])))
     else:
         picpath = askopenfilename(
@@ -619,8 +746,8 @@ if __name__ == "__main__":
         img = cv2.imread(picpath, cv2.IMREAD_UNCHANGED)
         if not img is None:
             print(
-                f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath,show_simple=True)}"
+                f"[INFO]:result{MIN2_ignore_sunspots(img, show=True, debug=True, img_path=picpath, show_simple=False)}"
             )
         else:
             print(f"[ERROR]:reading img failed path={picpath}")
-        print(f"[INFO]:process time :{time()-start} s")
+        print(f"[INFO]:process time :{time() - start} s")
