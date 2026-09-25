@@ -1,1 +1,7 @@
-.vscode/settings.json
+*.tiff
+*.log
+*__pycache__/
+.ruff_cache/
+.venv/
+build/
+dist/
